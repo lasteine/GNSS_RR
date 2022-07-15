@@ -19,6 +19,7 @@ import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import gnsscal
 
 # CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
 yy = str(21)
@@ -47,6 +48,7 @@ options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neum
 
 # Q: For Emlid and Leica Rover (working properly now for Emlid files)
 # TODO: check for Leica files
+
 for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=True):
     ''' get doy from rover file names with name structure:
         Leica Rover: '33933650.21o' [rover + doy + '0.' + yy + 'o']
@@ -62,18 +64,21 @@ for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=Tru
         options = options_Emlid
     if rover_name == 'NMLR':
         doy = rover_file.split('.')[0][-4:-1]
-        options = options_Leica
-    print('\nRover file: ' + rover_file, '\ndoy: ', doy)
+        options = options_Leica    print('\nRover file: ' + rover_file, '\ndoy: ', doy)
 
-    # define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
+    # convert doy to gpsweek and day of week
+    (gpsweek, dow) = gnsscal.yrdoy2gpswd(int('20' + yy), doy)
+
+    # Q: define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
     base_file = base + doy + '0.' + yy + 'O'
     broadcast_orbit_gps = nav + doy + '0.' + yy + 'n'
     broadcast_orbit_glonass = nav + doy + '0.' + yy + 'g'
     broadcast_orbit_galileo = nav + doy + '0.' + yy + 'l'
-    precise_orbit = sp3 + yy + doy + '.sp3'
+    # precise_orbit = sp3 + yy + doy + '.sp3'
+    precise_orbit = sp3 + str(gpsweek) + str(dow) + '.EPH_M'
     output_file = 'sol/' + rover_name + '/20' + yy + '_' + rover_name + doy + '.pos'
 
-    # run RTKLib automatically (instead of RTKPost Gui manually)
+    # Q: run RTKLib automatically (instead of RTKPost Gui manually)
     process = subprocess.Popen('cd data_neumayer && rnx2rtkp '
                                '-k ' + options + '.conf '
                                '-ti ' + ti_int + ' '
@@ -506,3 +511,8 @@ plt.legend(['buoy1', 'buoy2', 'buoy3', 'buoy4'], loc='lower right', fontsize=12)
 plt.ylabel('Snow accumulation (cm)', fontsize=14)
 plt.show()
 
+# calculate difference in pole accumulation to Leica
+for i in range(15):
+    p = (poles[str(i+1)].resample('D').median()-sh_leica.resample('D').median()).dropna()
+    p_day = p[(p.index == '2021-12-25')]
+    print(int(p_day))
