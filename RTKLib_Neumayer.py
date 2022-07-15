@@ -1,5 +1,7 @@
 """ Run RTKLib automatically for differential GNSS processing
 http://www.rtklib.com/
+import modules from github:
+gnsscal - gnss calendar transformations; https://github.com/purpleskyfall/gnsscal/blob/master/gnsscal.py
 
 input:  - GNSS options file (.conf)
         - GNSS rover file (rinex)
@@ -8,7 +10,6 @@ input:  - GNSS options file (.conf)
         - GNSS precise ephemerides file (.eph/.sp3); http://ftp.aiub.unibe.ch/CODE/2022_M/ (cod22002.eph_M.gz)
 output: - position (.pos) file; (UTC, X, Y, Z)
 created: LS
-
 """
 
 # IMPORT modules
