@@ -7,7 +7,7 @@ input:  - GNSS options file (.conf)
         - GNSS rover file (rinex)
         - GNSS base file (rinex)
         - GNSS navigation ephemerides file (.nav); https://cddis.nasa.gov/archive/gnss/data/daily/2022/brdc/ (brdc0010.22n.gz)
-        - GNSS precise ephemerides file (.eph/.sp3); http://ftp.aiub.unibe.ch/CODE/2022_M/ (cod22002.eph_M.gz)
+        - GNSS multi-GNSS precise ephemerides file (.eph/.sp3); http://ftp.aiub.unibe.ch/CODE/2022_M/ (cod22002.eph_M.gz)
 output: - position (.pos) file; (UTC, X, Y, Z)
 created: LS
 """
@@ -24,8 +24,8 @@ import gnsscal
 
 # CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
 yy = str(21)
-rover = 'NMER'      # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
-rover_name = 'NMER' # 'NMER' or 'NMER_original' or 'NMLR'
+rover = '3393'      # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
+rover_name = 'NMLR' # 'NMER' or 'NMER_original' or 'NMLR'
 receiver = 'NMLR'
 base = '3387'
 nav = '3387'
@@ -49,6 +49,8 @@ options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neum
 
 # Q: For Emlid and Leica Rover (working properly now for Emlid files)
 # TODO: check for Leica files
+start_doy = 0
+end_doy = 366
 
 for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=True):
     ''' get doy from rover file names with name structure:
@@ -61,79 +63,44 @@ for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=Tru
         doy = datetime.datetime.strptime(rover_file.split('.')[0].split('_')[2], "%Y%m%d%H%M").strftime('%j')
         options = options_Emlid
     if rover_name == 'NMER':       # Emlid pre-processed format (daily files)
-        doy = rover_file.split('.')[0][-4:-1]
+        doy = rover_file.split('.')[0][4:7]
         options = options_Emlid
     if rover_name == 'NMLR':
-        doy = rover_file.split('.')[0][-4:-1]
-        options = options_Leica    print('\nRover file: ' + rover_file, '\ndoy: ', doy)
+        doy = rover_file.split('.')[0][4:7]
+        options = options_Leica
+    print('\nRover file: ' + rover_file, '\ndoy: ', doy)
 
-    # convert doy to gpsweek and day of week
-    (gpsweek, dow) = gnsscal.yrdoy2gpswd(int('20' + yy), doy)
+    if int(doy) >= start_doy & int(doy) <= end_doy:
 
-    # Q: define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
-    base_file = base + doy + '0.' + yy + 'O'
-    broadcast_orbit_gps = nav + doy + '0.' + yy + 'n'
-    broadcast_orbit_glonass = nav + doy + '0.' + yy + 'g'
-    broadcast_orbit_galileo = nav + doy + '0.' + yy + 'l'
-    # precise_orbit = sp3 + yy + doy + '.sp3'
-    precise_orbit = sp3 + str(gpsweek) + str(dow) + '.EPH_M'
-    output_file = 'sol/' + rover_name + '/20' + yy + '_' + rover_name + doy + '.pos'
+        # convert doy to gpsweek and day of week
+        (gpsweek, dow) = gnsscal.yrdoy2gpswd(int('20' + yy), doy)
 
-    # Q: run RTKLib automatically (instead of RTKPost Gui manually)
-    process = subprocess.Popen('cd data_neumayer && rnx2rtkp '
-                               '-k ' + options + '.conf '
-                               '-ti ' + ti_int + ' '
-                               '-o ' + output_file + ' '
-                               + rover_file + ' ' + base_file + ' ' + broadcast_orbit_gps + ' ' + broadcast_orbit_glonass + ' ' + broadcast_orbit_galileo,
-                               shell=True,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
+        # Q: define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
+        base_file = base + doy + '0.' + yy + 'O'
+        broadcast_orbit_gps = nav + doy + '0.' + yy + 'n'
+        broadcast_orbit_glonass = nav + doy + '0.' + yy + 'g'
+        broadcast_orbit_galileo = nav + doy + '0.' + yy + 'l'
+        # precise_orbit = sp3 + yy + doy + '.sp3'
+        precise_orbit = sp3 + str(gpsweek) + str(dow) + '.EPH_M'
+        output_file = 'sol/' + rover_name + '/20' + yy + '_' + rover_name + doy + '.pos'
 
-    stdout, stderr = process.communicate()
-    # print(stdout) # print processing output
-    print(stderr)  # print processing errors
+        # Q: run RTKLib automatically (instead of RTKPost Gui manually)
+        process = subprocess.Popen('cd data_neumayer && rnx2rtkp '
+                                   '-k ' + options + '.conf '
+                                   '-ti ' + ti_int + ' '
+                                   '-o ' + output_file + ' '
+                                   + rover_file + ' ' + base_file + ' ' + broadcast_orbit_gps + ' ' + broadcast_orbit_glonass + ' ' + broadcast_orbit_galileo,
+                                   shell=True,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
 
-    # remove .stat files
-    if os.path.exists('data_neumayer/' + output_file + '.stat'):
-        os.remove('data_neumayer/' + output_file + '.stat')
+        stdout, stderr = process.communicate()
+        # print(stdout) # print processing output
+        print(stderr)  # print processing errors
 
-print('\n\nfinished with all files :-)')
-
-# Q: For Leica Rover (working well)
-# iterator for 3-digit numbers (001 etc.)
-doy_list = ["%.3d" % i for i in range(330, 366)]
-
-# for each day of year, do:
-for doy in doy_list:
-    doy = str(doy)
-    print('doy: ', doy, doy[-1])
-
-    # define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
-    base_file = base + doy + '0.' + yy + 'O'
-    rover_file = rover + doy + '0.' + yy + 'O'
-    broadcast_orbit_gps = nav + doy + '0.' + yy + 'n'
-    broadcast_orbit_glonass = nav + doy + '0.' + yy + 'g'
-    broadcast_orbit_galileo = nav + doy + '0.' + yy + 'l'
-    precise_orbit = sp3 + yy + doy + '.sp3'
-    output_file = 'sol/' + rover_name + '/' + rover_name + doy + '.pos'
-
-    # run RTKLib automatically (instead of RTKPost Gui manually)
-    process = subprocess.Popen('cd data_neumayer && rnx2rtkp '
-                               '-k ' + options + '.conf '
-                               '-ti ' + ti_int + ' '
-                               '-o ' + output_file + ' '
-                               + rover_file + ' ' + base_file + ' ' + broadcast_orbit_gps + ' ' + broadcast_orbit_glonass + ' ' + broadcast_orbit_galileo,
-                               shell=True,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-
-    stdout, stderr = process.communicate()
-    # print(stdout) # print processing output
-    print(stderr)   # print processing errors
-
-    # remove .stat files
-    if os.path.exists('data_neumayer/' + output_file + '.stat'):
-        os.remove('data_neumayer/' + output_file + '.stat')
+        # remove .stat files
+        if os.path.exists('data_neumayer/' + output_file + '.stat'):
+            os.remove('data_neumayer/' + output_file + '.stat')
 
 print('\n\nfinished with all files :-)')
 
@@ -152,6 +119,25 @@ for file in glob.iglob('data_neumayer/sol/' + receiver + '/*.pos', recursive=Tru
 
 # store dataframe as binary pickle format
 df_enu.to_pickle('data_neumayer/sol/' + receiver + '_' + resolution + '.pkl')
+
+# TODO: import RTKLib solution files from different solution types
+''' import RTKLib solution .txt files '''
+# create empty dataframe for all .ENU files
+df_enu = pd.DataFrame()
+ending = '_igsant_15ele_allfreq_noglo'
+
+# read all .ENU files in folder, parse date and time columns to datetimeindex and add them to the dataframe
+for file in glob.iglob('data_neumayer/sol/' + receiver + '/test/preciseorbit/*' + ending + '.pos', recursive=True):
+    print(file)
+    enu = pd.read_csv(file, header=27, delimiter=' ', skipinitialspace=True, index_col=['date_time'], na_values=["NaN"],
+                      usecols=[0, 1, 4, 5, 6, 9], names=['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'],
+                      parse_dates=[['date', 'time']])
+    df_enu = pd.concat([df_enu, enu], axis=0)
+
+globals()[f"df_enu{ending}"] = df_enu
+globals()[f"fil_df{ending}"] = pd.DataFrame(df_enu[(df_enu.amb_state == 1)])
+fil_df = globals()[f"fil_df{ending}"]
+globals()[f"fil{ending}"]  = (fil_df.U + 3.2314) * 1000
 
 
 ''' Read binary stored ENU data '''
@@ -309,6 +295,40 @@ plt.yticks(fontsize=14)
 plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
 plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', bbox_inches='tight')
 
+# TODO: test different solution types
+# plot SWE, Density, Accumulation (from manual obs at Spuso)
+plt.figure()
+swe_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-0, 200)).grid()
+swe_emlid.plot(color='salmon', linestyle='--')
+fil_igsant.plot(color='yellow', linestyle='--')
+fil_igsant_15.plot(color='magenta', linestyle='-.')
+fil_igsant_15ele.plot(color='k', linestyle=':')
+fil_igsant_15ele_allfreq.plot(color='b', linestyle='-')
+fil_igsant_15ele_allfreq_noglo.plot(color='green', linestyle='--')
+
+# swe_emlid.plot(color='salmon', linestyle='--')
+plt.errorbar((manual.SWE_aboveAnt.astype('float64')).index, (manual.SWE_aboveAnt.astype('float64')), yerr=(manual.SWE_aboveAnt.astype('float64'))/10, color='k', linestyle='',capsize=4, alpha=0.5)
+sh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+(manual.Acc.astype('float64')*10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+plt.errorbar((manual.Acc.astype('float64')*10).index, (manual.Acc.astype('float64')*10), yerr=(manual.Acc.astype('float64')*10)/10, color='darkblue', linestyle='',capsize=4, alpha=0.5)
+(sh/1000*ipol).dropna().plot(color='k', linestyle='--').grid()
+(manual.SWE_aboveAnt.astype('float64')).plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
+(manual.Density_aboveAnt.dropna()).plot(color='steelblue', linestyle=' ', marker='*', markersize=8, markeredgewidth=2, label='Density (kg/m3)').grid()
+plt.errorbar(manual.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt/10, color='k', linestyle='',capsize=4, alpha=0.5)
+#plt.fill_between(sh_std.index, sh - sh_std, sh + sh_std, color="darkblue", alpha=0.2)
+#plt.fill_between(s_15min.index, (m_15min-m_15min[0]) - s_15min, (m_15min-m_15min[0]) + s_15min, color="crimson", alpha=0.2)
+plt.xlabel(None)
+plt.ylabel('SWE (mm w.e.)', fontsize=14)
+plt.legend(['Leica', 'Emlid', 'igsant', 'igsant_15', 'igsant_15ele', 'igsant_15ele_allfreq', 'igsant_15ele_allfreq_noglo'], loc='upper left')
+#plt.legend(['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)', 'Manual', 'Density (kg/m3)'], fontsize=11, loc='upper left')
+plt.xlim(datetime.datetime.strptime('2021-11-26', "%Y-%m-%d"), datetime.datetime.strptime('2022-02-01', "%Y-%m-%d"))
+plt.xticks(fontsize=14)
+plt.yticks(fontsize=14)
+plt.show()
+#plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
+#plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', bbox_inches='tight')
+
+# end todo
 
 # plot Difference in SWE (compared to Leica), fitting above plot
 plt.figure()
