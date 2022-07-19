@@ -124,7 +124,7 @@ df_enu.to_pickle('data_neumayer/sol/' + receiver + '_' + resolution + '.pkl')
 ''' import RTKLib solution .txt files '''
 # create empty dataframe for all .ENU files
 df_enu = pd.DataFrame()
-ending = '_igsant_15ele_allfreq_noglo'
+ending = '_igsant_15'
 
 # read all .ENU files in folder, parse date and time columns to datetimeindex and add them to the dataframe
 for file in glob.iglob('data_neumayer/sol/' + receiver + '/test/preciseorbit/*' + ending + '.pos', recursive=True):
@@ -137,7 +137,26 @@ for file in glob.iglob('data_neumayer/sol/' + receiver + '/test/preciseorbit/*' 
 globals()[f"df_enu{ending}"] = df_enu
 globals()[f"fil_df{ending}"] = pd.DataFrame(df_enu[(df_enu.amb_state == 1)])
 fil_df = globals()[f"fil_df{ending}"]
-globals()[f"fil{ending}"]  = (fil_df.U + 3.2314) * 1000
+globals()[f"fil{ending}"]  = (fil_df.U - fil_df.U[1]) * 1000
+fil = globals()[f"fil{ending}"]
+
+# remove outliers
+upper_limit = fil.median() + 3 * fil.std()
+lower_limit = fil.median() - 3 * fil.std()
+globals()[f"fil_clean{ending}"] = fil[(fil > lower_limit) & (fil < upper_limit)]
+
+# filter data
+globals()[f"m{ending}"] = globals()[f"fil_clean{ending}"].rolling('D').median()       # .resample('15min').median()
+globals()[f"s{ending}"] = globals()[f"fil_clean{ending}"].rolling('D').std()
+
+# adjust for snow mast heightening (approx. 3m elevated)
+m_15min = globals()[f"m{ending}"]
+jump = m_15min[(m_15min.diff() < -1000)]    # detect jumps (>2m) in the dataset
+adj = m_15min[(m_15min.index > jump.index.format()[0])] - jump[0]     # correct jump [1]
+globals()[f"m_adj{ending}"] = m_15min[~(m_15min.index >= jump.index.format()[0])].append(adj)   # adjusted dataset
+
+globals()[f"swe{ending}"] = globals()[f"m_adj{ending}"]-globals()[f"m_adj{ending}"][0]
+globals()[f"swe{ending}"].index = globals()[f"swe{ending}"].index + pd.Timedelta(seconds=18)
 
 
 ''' Read binary stored ENU data '''
