@@ -112,7 +112,7 @@ print('\n\nfinished renaming all files :-)')
 # run command: 'gfzrnx -finp NMER00XXX_R_2021330????_01D_30S_MO.21o -fout ::RX3D:: -d 86400'
 for file in glob.iglob('data_neumayer/temp/NMER00XXX_R_20' + '*.' + yy + 'O', recursive=True):
     ''' get doy from rover file names with name structure:
-        gfzrx merge input:   'NMER00XXX_R_2021329????_01D_30S_MO.yyo'
+        gfzrnx merge input:   'NMER00XXX_R_2021329????_01D_30S_MO.yyo'
         gfzrnx merge output: 'NMER00XXX_R_2021330????_01D_30S_MO.rnx'
         '''
     print(file)

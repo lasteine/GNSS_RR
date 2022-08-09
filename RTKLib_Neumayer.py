@@ -103,6 +103,7 @@ for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=Tru
             os.remove('data_neumayer/' + output_file + '.stat')
 
 print('\n\nfinished with all files :-)')
+print('\n\nfinished with all files :-)')
 
 
 ''' import RTKLib solution .txt files '''

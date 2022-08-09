@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import glob
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,13 +20,13 @@ receiver = 'WJL0'       # 'WJU1' for ublox, 'WJL0' for Leica
 #     df_enu = pd.concat([df_enu, enu], axis=0)
 #
 # # store dataframe as binary pickle format
-# df_enu.to_pickle('data/sol/' + receiver + '_' + resolution + '.pkl')
+# df_enu.to_pickle('data_WFJ/sol/' + receiver + '_' + resolution + '.pkl')
 
 
 
 ''' Read binary stored ENU data '''
 # read all data from .pkl and combine, if necessary multiple parts
-df_enu = pd.read_pickle('data/sol/' + receiver + '_' + resolution + '.pkl')
+df_enu = pd.read_pickle('data_WFJ/sol/' + receiver + '_' + resolution + '.pkl')
 
 # select data where ambiguities are fixed (amb_state==1)
 fil_df = pd.DataFrame(df_enu[(df_enu.amb_state == 1)])
@@ -49,14 +49,17 @@ m_30min = m_30.resample('30min').mean()       # .resample('15min').median()
 s_30min = s_30.resample('30min').mean()
 
 ''' Read reference .csv data '''
+# read snow depth observations (hourly resolutions)
+sh = pd.read_csv('data_WFJ/ref/wfj_sh.csv', header=0, delimiter=';', index_col=0, na_values=["NaN"], parse_dates=[0])
+
 # read SWE observations (30min resolution)
-wfj = pd.read_csv('data/ref/WFJ.csv', header=0, delimiter=';', index_col=0, na_values=["NaN"], names=['scale', 'pillow'])
+wfj = pd.read_csv('data_WFJ/ref/WFJ.csv', header=0, delimiter=';', index_col=0, na_values=["NaN"], names=['scale', 'pillow'])
 wfj.index = pd.DatetimeIndex(wfj.index)
 wfj = wfj.rolling('D').median()
 wfj2 = wfj
 wfj2.index = wfj2.index - pd.Timedelta(days=0.5)
 wfj2.index = wfj2.index.tz_convert(None)    # convert to timezone unaware index
-manual = pd.read_csv('data/ref/manual.csv', header=None, skipinitialspace=True, delimiter=';', index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True, usecols=[0, 2], names=['date', 'manual'])
+manual = pd.read_csv('data_WFJ/ref/manual.csv', header=None, skipinitialspace=True, delimiter=';', index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True, usecols=[0, 2], names=['date', 'manual'])
 
 # calculate median (per day and 10min) and relative bias (per day)
 scale_res = wfj2.scale.resample('D').median()
@@ -71,8 +74,8 @@ scale_30min = wfj2.scale   # calculate median per 10min (filtered over one day)
 # all_10min = pd.concat([scale_10min, m_15min], axis=1)
 
 ''' Plot results (SWE, ΔSWE, scatter): now only GNSS'''
-m_ref = (ref['pillow'] + ref['scale'])/2 * 1000
-ref['rtklib'] = ref['rtklib'] *1000
+# m_ref = (ref['pillow'] + ref['scale'])/2 * 1000
+# ref['rtklib'] = ref['rtklib'] *1000
 
 
 # Linear fits
@@ -96,7 +99,7 @@ plt.fill_between(m.index, m - s, m + s, color="crimson", alpha=0.2)
 plt.xlabel(None)
 plt.ylabel('SWE (mm w.e.)', fontsize=14)
 plt.legend(['Snow scale', 'Manual', 'GNSS'], fontsize=12, loc='upper left')
-plt.xlim(datetime.datetime.strptime('2016-11-01', "%Y-%m-%d"), datetime.datetime.strptime('2017-07-01', "%Y-%m-%d"))
+plt.xlim([dt.date(2016, 11, 1), dt.date(2017, 7, 1)])
 plt.xticks(fontsize=14)
 plt.yticks(fontsize=14)
 # plt.show()
@@ -120,7 +123,7 @@ dmanual.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth
 plt.xlabel(None)
 plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
 plt.legend(['Snow scale', 'Manual'], fontsize=14, loc='upper left')
-plt.xlim(datetime.datetime.strptime('2016-11-01', "%Y-%m-%d"), datetime.datetime.strptime('2017-07-01', "%Y-%m-%d"))
+plt.xlim([dt.date(2016, 11, 1), dt.date(2017, 7, 1)])
 plt.xticks(fontsize=14)
 plt.yticks(fontsize=14)
 # plt.show()
