@@ -59,6 +59,12 @@ def move_files2parentdir(dest_path, f):
 
 
 def check_existing_files(dest_path, rover, yy):
+    """ check if rinex files are already available in the processing directory, otherwise copy & uncompress files from server
+    :param dest_path: temp directory for preprocessing the GNSS rinex files
+    :param rover: rover file name prefix
+    :param yy: newest year
+    :return: doy_max: maximum doy in existing files, newer doys should be copied
+    """
     # Q: get list of yydoys in processing folder for receiver
     # get parent directory
     parent_dir = os.path.dirname(os.path.dirname(dest_path))
@@ -104,8 +110,11 @@ def copy_rinex_files(source_path, dest_path, yy='22', receiver=['NMLB', 'NMLR', 
         & delete compressed files and subfolders afterwards
     :param source_path: remote directory hosting compressed GNSS rinex files
     :param dest_path: local directory for processing the GNSS rinex files
+    :param yy: newest year, used to check newest data files available in the processing folder
     :param receiver: high-end (Leica) or low-cost (Emlid), needs to be treated differently
     :param copy: do you want to copy (True) the data or skip copying (False) the data and just decompress and further?
+    :param move: move renamed files to parent directory (True) or not (False)
+    :param delete_temp: delete temporary directory (True) or not (False)
     """
     # Q: create temp directory if not existing
     create_folder(dest_path)
@@ -133,6 +142,7 @@ def copy_rinex_files(source_path, dest_path, yy='22', receiver=['NMLB', 'NMLR', 
                 yy_file = os.path.basename(f).split('_')[2][2:4]
 
                 # Q: only copy files from server which are newer than the already existing doys of year=yy
+
                 if doy_file > doy_max and yy_file == yy:
                     # copy file if it does not already exist
                     if not os.path.exists(dest_file):
@@ -349,6 +359,7 @@ def rename_merged_rinexfiles(dest_path, rover_name, move=[True, False], delete_t
     :param dest_path: local temporary directory for preprocessing the GNSS rinex files
     :param rover_name: name of rover receiver
     :param move: move renamed files to parent directory (True) or not (False)
+    :param delete_temp: delete temporary directory (True) or not (False)
 
     gfzrnx merge output: 'NMER00XXX_R_2021330????_01D_30S_MO.rnx'
     rtklib input: 'NMERdoy0.yyo'  [rover_prefix + doy + '0.' + yy + 'o']
