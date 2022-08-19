@@ -51,7 +51,7 @@ options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neum
 # TODO: check for Leica files
 start_doy = 0
 end_doy = 366
-
+# Q: run rtklib for all rover files in directory
 for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=True):
     ''' get doy from rover file names with name structure:
         Leica Rover: '33933650.21o' [rover + doy + '0.' + yy + 'o']
@@ -80,16 +80,18 @@ for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=Tru
         broadcast_orbit_gps = nav + doy + '0.' + yy + 'n'
         broadcast_orbit_glonass = nav + doy + '0.' + yy + 'g'
         broadcast_orbit_galileo = nav + doy + '0.' + yy + 'l'
-        # precise_orbit = sp3 + yy + doy + '.sp3'
         precise_orbit = sp3 + str(gpsweek) + str(dow) + '.EPH_M'
         output_file = 'sol/' + rover_name + '/20' + yy + '_' + rover_name + doy + '.pos'
 
-        # Q: run RTKLib automatically (instead of RTKPost Gui manually)
+        # Q: change directory & run RTKLib post processing command
+        # example command to run RTKLib:
+        # 'rnx2rtkp -k rtkpost_options.conf -ti 900 -o sol/NMLR/15min/NMLRdoy.pos NMLR0040.17O NMLB0040.17O NMLB0040.17n NMLB0040.17g NMLB0040.17e COD17004.eph'
+
         process = subprocess.Popen('cd data_neumayer && rnx2rtkp '
                                    '-k ' + options + '.conf '
                                    '-ti ' + ti_int + ' '
                                    '-o ' + output_file + ' '
-                                   + rover_file + ' ' + base_file + ' ' + broadcast_orbit_gps + ' ' + broadcast_orbit_glonass + ' ' + broadcast_orbit_galileo,
+                                   + rover_file + ' ' + base_file + ' ' + broadcast_orbit_gps + ' ' + broadcast_orbit_glonass + ' ' + broadcast_orbit_galileo + ' ' + precise_orbit,
                                    shell=True,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
@@ -102,7 +104,6 @@ for file in glob.iglob('data_neumayer/' + rover + '*.' + yy + 'O', recursive=Tru
         if os.path.exists('data_neumayer/' + output_file + '.stat'):
             os.remove('data_neumayer/' + output_file + '.stat')
 
-print('\n\nfinished with all files :-)')
 print('\n\nfinished with all files :-)')
 
 
@@ -121,8 +122,7 @@ for file in glob.iglob('data_neumayer/sol/' + receiver + '/*.pos', recursive=Tru
 # store dataframe as binary pickle format
 df_enu.to_pickle('data_neumayer/sol/' + receiver + '_' + resolution + '.pkl')
 
-# TODO: import RTKLib solution files from different solution types
-''' import RTKLib solution .txt files '''
+''' import RTKLib solution files from different solution variants'''
 # create empty dataframe for all .ENU files
 df_enu = pd.DataFrame()
 ending = '_igsant_15'
@@ -315,40 +315,6 @@ plt.yticks(fontsize=14)
 plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
 plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', bbox_inches='tight')
 
-# TODO: test different solution types
-# plot SWE, Density, Accumulation (from manual obs at Spuso)
-plt.figure()
-swe_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-0, 200)).grid()
-swe_emlid.plot(color='salmon', linestyle='--')
-fil_igsant.plot(color='yellow', linestyle='--')
-fil_igsant_15.plot(color='magenta', linestyle='-.')
-fil_igsant_15ele.plot(color='k', linestyle=':')
-fil_igsant_15ele_allfreq.plot(color='b', linestyle='-')
-fil_igsant_15ele_allfreq_noglo.plot(color='green', linestyle='--')
-
-# swe_emlid.plot(color='salmon', linestyle='--')
-plt.errorbar((manual.SWE_aboveAnt.astype('float64')).index, (manual.SWE_aboveAnt.astype('float64')), yerr=(manual.SWE_aboveAnt.astype('float64'))/10, color='k', linestyle='',capsize=4, alpha=0.5)
-sh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-(manual.Acc.astype('float64')*10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-plt.errorbar((manual.Acc.astype('float64')*10).index, (manual.Acc.astype('float64')*10), yerr=(manual.Acc.astype('float64')*10)/10, color='darkblue', linestyle='',capsize=4, alpha=0.5)
-(sh/1000*ipol).dropna().plot(color='k', linestyle='--').grid()
-(manual.SWE_aboveAnt.astype('float64')).plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
-(manual.Density_aboveAnt.dropna()).plot(color='steelblue', linestyle=' ', marker='*', markersize=8, markeredgewidth=2, label='Density (kg/m3)').grid()
-plt.errorbar(manual.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt/10, color='k', linestyle='',capsize=4, alpha=0.5)
-#plt.fill_between(sh_std.index, sh - sh_std, sh + sh_std, color="darkblue", alpha=0.2)
-#plt.fill_between(s_15min.index, (m_15min-m_15min[0]) - s_15min, (m_15min-m_15min[0]) + s_15min, color="crimson", alpha=0.2)
-plt.xlabel(None)
-plt.ylabel('SWE (mm w.e.)', fontsize=14)
-plt.legend(['Leica', 'Emlid', 'igsant', 'igsant_15', 'igsant_15ele', 'igsant_15ele_allfreq', 'igsant_15ele_allfreq_noglo'], loc='upper left')
-#plt.legend(['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)', 'Manual', 'Density (kg/m3)'], fontsize=11, loc='upper left')
-plt.xlim(datetime.datetime.strptime('2021-11-26', "%Y-%m-%d"), datetime.datetime.strptime('2022-02-01', "%Y-%m-%d"))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-plt.show()
-#plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
-#plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', bbox_inches='tight')
-
-# end todo
 
 # plot Difference in SWE (compared to Leica), fitting above plot
 plt.figure()
