@@ -58,11 +58,10 @@ def move_files2parentdir(dest_path, f):
         print(colored("file in destination already exists, move aborted: %s" % dest_path_file, 'yellow'))
 
 
-def check_existing_files(dest_path, rover, yy):
+def check_existing_files(dest_path, rover):
     """ check if rinex files are already available in the processing directory, otherwise copy & uncompress files from server
     :param dest_path: temp directory for preprocessing the GNSS rinex files
     :param rover: rover file name prefix
-    :param yy: newest year
     :return: doy_max: maximum doy in existing files, newer doys should be copied
     """
     # Q: get list of yydoys in processing folder for receiver
@@ -70,8 +69,21 @@ def check_existing_files(dest_path, rover, yy):
     parent_dir = os.path.dirname(os.path.dirname(dest_path))
     print('parent dir: ', parent_dir)
 
+    # get newest year of files in processing folder
+    years = ['0']
+    for f in glob.iglob(parent_dir + '/' + rover + '???0.*O'):
+        # extract doy from filename
+        year = os.path.basename(f).split('.')[1][:2]
+        # add doy to series of doys
+        years.append(year)
+
+    # get newest doy and return
+    year_max = max(years)
+    print(colored('newest year in existing files of parent dir: %s' % year_max, 'blue'))
+
+    # get newest doy of files in processing folder
     doys = ['0']
-    for f in glob.iglob(parent_dir + '/' + rover + '???0.' + yy + 'O'):
+    for f in glob.iglob(parent_dir + '/' + rover + '???0.' + year_max + 'O'):
         # extract doy from filename
         doy = os.path.basename(f).split('.')[0][4:7]
         # add doy to series of doys
@@ -81,7 +93,7 @@ def check_existing_files(dest_path, rover, yy):
     doy_max = max(doys)
     print(colored('newest doy in existing files of parent dir: %s' % doy_max, 'blue'))
 
-    return doy_max
+    return year_max, doy_max
 
 def copy_file_no_overwrite(source_path, dest_path, file_name):
     """ copy single files without overwriting existing files
@@ -104,13 +116,12 @@ def copy_file_no_overwrite(source_path, dest_path, file_name):
     pass
 
 
-def copy_rinex_files(source_path, dest_path, yy='22', receiver=['NMLB', 'NMLR', 'NMER'], copy=[True, False], move=[True, False], delete_temp=[True, False]):
+def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], copy=[True, False], move=[True, False], delete_temp=[True, False]):
     """ copy rinex files of remote directory to a local temp directory if it does not already exist
         & uncompress files, keep observation (and navigation) files
         & delete compressed files and subfolders afterwards
     :param source_path: remote directory hosting compressed GNSS rinex files
     :param dest_path: local directory for processing the GNSS rinex files
-    :param yy: newest year, used to check newest data files available in the processing folder
     :param receiver: high-end (Leica) or low-cost (Emlid), needs to be treated differently
     :param copy: do you want to copy (True) the data or skip copying (False) the data and just decompress and further?
     :param move: move renamed files to parent directory (True) or not (False)
@@ -128,8 +139,8 @@ def copy_rinex_files(source_path, dest_path, yy='22', receiver=['NMLB', 'NMLR', 
     if receiver == 'NMER':
         rover = receiver
 
-    # check already existing doys of files in processing directory
-    doy_max = check_existing_files(dest_path, rover, yy)
+    # Q: check already existing years and doys of files in processing directory, get newest yeardoy
+    year_max, doy_max = check_existing_files(dest_path, rover)
 
     if receiver == 'NMER':
         # Q: copy files from network drive to local temp folder
@@ -143,7 +154,7 @@ def copy_rinex_files(source_path, dest_path, yy='22', receiver=['NMLB', 'NMLR', 
 
                 # Q: only copy files from server which are newer than the already existing doys of year=yy
 
-                if doy_file > doy_max and yy_file == yy:
+                if yy_file == year_max and doy_file > doy_max:
                     # copy file if it does not already exist
                     if not os.path.exists(dest_file):
                         shutil.copy2(f, dest_path)
@@ -180,7 +191,7 @@ def copy_rinex_files(source_path, dest_path, yy='22', receiver=['NMLB', 'NMLR', 
                 yy_file = os.path.basename(f).split('.')[1][:2]
 
                 # Q: only copy files from server which are newer than the already existing doys of year=yy
-                if doy_file > doy_max and yy_file == yy:
+                if yy_file == year_max and doy_file > doy_max:
                     # copy file if it does not already exist
                     if not os.path.exists(dest_file):
                         shutil.copy2(f, dest_path)

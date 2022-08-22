@@ -50,14 +50,11 @@ end_doy = 366
 
 
 """ 0. Preprocess data """
-# Q: Copy & uncompress data to processing folder
-# copy files (NMLB + all orbits, NMLR, NMER) to data_neumayer/ (via a temporary folder for all intermediate steps)
-preprocess.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', yy='22', receiver='NMER', copy=True, move=True, delete_temp=True) # for emlid rover: NMER
-preprocess.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', yy='22', receiver='NMLR', copy=True, move=True, delete_temp=True)    # for leica rover: NMLR
-preprocess.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', yy='22', receiver='NMLB', copy=True, move=True, delete_temp=True)    # for leica base: NMLB
+# copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
+preprocess.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True, move=True, delete_temp=True) # for emlid rover: NMER
+preprocess.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True, move=True, delete_temp=True)    # for leica rover: NMLR
+preprocess.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True, move=True, delete_temp=True)    # for leica base: NMLB
 
-# Q: split & merge day-overlapping Emlid rinex files to daily rinex files (for Emlid files only!)
-# preprocess.dayoverlapping2daily_rinexfiles(dst_path + 'temp_NMER/', 'ReachM2_sladina-raw_', 'NMER', move=True, delete_temp=True)
 
 
 # TODO: write functions for processing and plotting
