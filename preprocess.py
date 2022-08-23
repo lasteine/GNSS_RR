@@ -752,7 +752,7 @@ def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_shm.pkl', resa
     return df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled
 
 
-def read_reference_data(dest_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, resample_resolution='30min', laser_pickle='shm/nm_shm.pkl'):
+def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], resample_resolution='30min', laser_pickle='shm/nm_shm.pkl'):
     """ read reference sensor's observations from manual observations, a snow buoy sensor, a laser distance sensor and manual pole observations
     :param read_laser: read laser accumulation data (True) or not (False)
     :param read_poles: read poles accumulation data (True) or not (False)

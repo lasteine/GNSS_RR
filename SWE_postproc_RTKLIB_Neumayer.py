@@ -17,20 +17,16 @@ date:    8.8.2022
 """
 
 # IMPORT modules
-import subprocess
 import os
 import datetime as dt
 import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import gnsscal
-import shutil
 import preprocess
 
 
 # CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
-data_path = 'data_neumayer'
 scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'    # data source path at AWI server (data copied from Antarctica via O2A)
 dst_path = 'C:/Users/sladina.BGEO02P102/Documents/Paper_SWE_RTK/Run_RTKLib/data_neumayer/'
 rover = 'ReachM2_sladina-raw_'  # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
@@ -62,15 +58,14 @@ preprocess.automate_rtklib_pp(dst_path, 'NMER', yy, ti_int, base, nav, sp3, reso
 preprocess.automate_rtklib_pp(dst_path, '3393', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy, 'NMLR', options_Leica)
 
 
+""" 2. Get RTKLib ENU solution files """
+# read all RTKLib ENU solution files (daily) and store them in one dataframe for whole season
+df_enu_emlid = preprocess.get_rtklib_solutions(dst_path, 'NMER', resolution, ending, header_length=26)
+df_enu_leica = preprocess.get_rtklib_solutions(dst_path, 'NMLR', resolution, ending, header_length=27)
 
-""" 2. Get rtklib ENU solution files"""
-# tODO: check no header in df_enu
-df_enu_emlid = preprocess.get_rtklib_solutions(dst_path, 'NMER', resolution, ending)
-df_enu_leica = preprocess.get_rtklib_solutions(dst_path, 'NMLR', resolution, ending)
-
-
+# ''' 3. Filter and clean ENU solution data more automized variable creation '''
+#
 # hier wäre gut: globals()[f"df_enu{ending}"] = df_enu
-
 # TODO: write functions
 # TODO: check where to implement generic variable names
 # # import RTKLib solution files from different solution variants
@@ -97,140 +92,41 @@ df_enu_leica = preprocess.get_rtklib_solutions(dst_path, 'NMLR', resolution, end
 # globals()[f"swe{ending}"] = globals()[f"m_adj{ending}"]-globals()[f"m_adj{ending}"][0]
 # globals()[f"swe{ending}"].index = globals()[f"swe{ending}"].index + pd.Timedelta(seconds=18)
 
-
 ''' 3. Filter and clean ENU solution data '''
-# read all data from .pkl and combine, if necessary multiple parts
-# df_enu = pd.read_pickle(data_path + '/sol/' + rover + '_' + resolution + ending + '.pkl')
-
-# select only data where ambiguities are fixed (amb_state==1) and sort datetime index
-fil_df = pd.DataFrame(df_enu[(df_enu.amb_state == 1)])
-# if rover_name == 'NMLR':
-#     # select data where ambiguities are fixed (amb_state==1)
-#     fil_df = pd.DataFrame(df_enu[(df_enu.amb_state == 1)])  # for high-end data
-# else:
-#     # select data where ambiguities are float (amb_state==2) and have a low stdev (<2.5mm)
-#     fil_df = pd.DataFrame(df_enu[(df_enu.amb_state == 2) & (df_enu.std_u < 0.0025)])    # for low-cost data
-
-fil_df.index = pd.DatetimeIndex(fil_df.index)
-fil_df = fil_df.sort_index()
-
-# adapt up values to reference SWE values in mm (median of first hours)
-fil = (fil_df.U - fil_df.U[:48].median()) * 1000
-
-# remove outliers based on a 3*sigma threshold
-upper_limit = fil.median() + 3 * fil.std()
-lower_limit = fil.median() - 3 * fil.std()
-fil_clean = fil[(fil > lower_limit) & (fil < upper_limit)]
-
-# filter data with a rolling median and resample resolution to fit reference data (30min)
-m_15min = fil_clean.rolling('D').median()       # .resample('15min').median()
-s_15min = fil_clean.rolling('D').std()
-
-# adjust for snow mast heightening (approx. 3m elevated)
-jump = m_15min[(m_15min.diff() < -1000)]    # detect jumps (>2m) in the dataset
-adj = m_15min[(m_15min.index > jump.index.format()[0])] - jump[0]     # correct jump [1]
-m_15min_adj = m_15min[~(m_15min.index >= jump.index.format()[0])].append(adj)   # adjusted dataset
-swe_gnss = m_15min_adj-m_15min_adj[0]
-swe_gnss.index = swe_gnss.index + pd.Timedelta(seconds=18)
-
-# resample data, calculate median and standard deviation (noise) per day to fit manual reference data
-m = swe_gnss.resample('D').median()
-s = swe_gnss.resample('D').std()
+# filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening) and store results in pickle and .csv
+df_enu_emlid, fil_df_emlid, fil_emlid, fil_clean_emlid, m_emlid, s_emlid, jump_emlid, swe_gnss_emlid, swe_gnss_daily_emlid, std_gnss_daily_emlid = preprocess.filter_rtklib_solutions(dst_path, df_enu_emlid, 'NMER', resolution, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D', resample=False, resample_resolution='30min', ending=ending)
+df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_leica, swe_gnss_leica, swe_gnss_daily_leica, std_gnss_daily_leica = preprocess.filter_rtklib_solutions(dst_path, df_enu_leica, 'NMLR', resolution, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D', resample=False, resample_resolution='30min', ending=ending)
 
 
-# store swe results to pickle
-os.makedirs('sol/SWE_results/', exist_ok=True)
-swe_gnss.to_pickle(data_path + '/sol/SWE_results/2021_22_swe_gnss_' + rover_name + '.pkl')
-swe_gnss.to_csv(data_path + '/sol/SWE_results/2021_22_swe_gnss_' + rover_name + '.csv')
 
-# read gnss swe results from pickle
-swe_leica = pd.read_pickle(data_path + '/sol/SWE_results/2021_22_swe_gnss_NMLR.pkl')
-swe_emlid = pd.read_pickle(data_path + '/sol/SWE_results/2021_22_swe_gnss_NMER.pkl')
+''' 4. Read reference sensors .csv data '''
+manual, ipol, buoy, poles, df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled = preprocess.read_reference_data(dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, resample_resolution='30min', laser_pickle='shm/nm_shm.pkl')
 
 
-''' 3. Read reference sensors .csv data '''
-# Q: Accumulation (cm), Density (kg/m^3), SWE (mm w.e.)
-manual = pd.read_csv('data_neumayer/03_Densitypits/Manual_Spuso.csv', header=1, skipinitialspace=True, delimiter=';', index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True, names=['Acc', 'Density', 'SWE', 'Density_aboveAnt', 'SWE_aboveAnt'])
-manual2 = manual
-manual2.index = manual2.index + pd.Timedelta(days=0.2)
-ipol = manual.Density_aboveAnt.resample('min').interpolate(method='linear', limit_direction = 'backward')
 
-# Q: read snow buoy data
-buoy_all = pd.read_csv('data_neumayer/06_SHM/Snowbuoy/2017S54_300234011695900_proc.csv', header=0, skipinitialspace=True, delimiter=',', index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0],
-                   names=['lat', 'lon', 'sh1', 'sh2', 'sh3', 'sh4', 'pressure', 'airtemp', 'bodytemp', 'gpstime'])
-
-# select only data from season 21/22
-buoy = buoy_all['2021-11-26':]
-
-# Differences in accumulation (in mm)
-for i in range(4):
-    globals()[f"sh_buoy{i+1}"] = (buoy['sh' + str(i+1)] - buoy['sh' + str(i+1)][0]) * 1000
-    # calculate accumulation gain
-    print('Accumulation gain sh_buoy' + str(i+1) + ': ', round(globals()[f"sh_buoy{i+1}"].dropna()['2021-12-23'][1],1))
-
-
-# Q: read Pegelfeld Spuso accumulation from poles
-poles = pd.read_csv(data_path + '/03_Densitypits/Pegelfeld_Spuso_Akkumulation.csv', header=0, delimiter=';', index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True)
-
-
-# Q. read snow depth observations (minute resolution)
-# # create empty dataframe for all .log files
-# df_shm = pd.DataFrame()
-# # read all snow accumulation.log files in folder, parse date and time columns to datetimeindex and add them to the dataframe
-# for file in glob.iglob(data_path + '/shm/nm*.log', recursive=True):
-#     print(file)
-#     # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
-#     shm = pd.read_csv(file, header=0, delimiter=r'[ >]', skipinitialspace=True, na_values=["NaN"], names=['date', 'time', 'none','h', 'signal', 'temp', 'error', 'check'], usecols=[0,1,3,5,6],
-#                       encoding='latin1', parse_dates=[['date', 'time']], index_col=['date_time'], engine='python', dayfirst=True)
-#     df_shm = pd.concat([df_shm, shm], axis=0)
-#
-# # store as .pkl
-# df_shm.to_pickle(data_path + '/shm/nm_shm.pkl')
-df_shm = pd.read_pickle(data_path + '/shm/nm_shm.pkl')
-h = df_shm[(df_shm.error == 0)].h * 1000
-fil_h = (h - h[0])  # adapt to reference SWE values in mm
-
-# clean outliers
-ul = fil_h.median() + 1 * fil_h.std()
-ll = fil_h.median() - 1 * fil_h.std()
-fil_h_clean = fil_h[(fil_h > ll) & (fil_h < ul)]
-
-# resample snow accumulation data
-h = fil_h_clean.resample('6H').median()
-h_std = fil_h_clean.resample('H').std()
-sh = fil_h_clean.rolling('D').median()
-sh_std = fil_h_clean.rolling('D').std()
-
-# calculate SWE from snow accumulation and mean density data (at 0.5m)
-swe_laser_constant = (sh/1000)*408   # swe = h[m] * density[kg/m3]; mean_density(0.5m)=408 from Hecht_2022
-swe_laser_constant_15min = swe_laser_constant.resample('15min').median()
-
-# with interpolated density data from layers in depths above the buried antenna
-swe_laser = (sh/1000) * ipol
-swe_laser_15min = swe_laser.resample('15min').median()
-
-
+# TODO: write functions
+''' calculate differences between reference and gnss swe data '''
 # Q: difference gnss sh to shm sh (ab dem 23.dez);
 # pegelfeld spuso: 59cm schneezutrag zw. 26.11 und 26.12
 # shm: ca. 50cm schneezutrag
-sh_gnss = swe_gnss * 1000 / 408     # convert gnss swe to snow accumulation with mean density (at 0.5m)
+sh_gnss = swe_gnss_leica * 1000 / 408     # convert gnss swe to snow accumulation with mean density (at 0.5m)
 sh_diff = (sh.resample('D').median() - sh_gnss.resample('D').median()).median().round(0)    # 278mm
 
 # calculate sh from GNSS SWE with a mean constant density value for h=0.5m (Hecht, 2022)
-sh_leica_const = swe_leica * 1000 / 408
-sh_emlid_const = swe_emlid * 1000 / 408
+sh_leica_const = swe_gnss_leica * 1000 / 408
+sh_emlid_const = swe_gnss_emlid * 1000 / 408
 
 # calculate sh from GNSS SWE with interpolated density values (Spuso)
-sh_leica = swe_leica * 1000 / ipol
-sh_emlid = swe_emlid * 1000 / ipol
+sh_leica = swe_gnss_leica * 1000 / ipol
+sh_emlid = swe_gnss_emlid * 1000 / ipol
 
 # resample sh and swe data (daily)
 sh_leica_daily = sh_leica.resample('D').median()
-swe_leica_daily = swe_leica.resample('D').median()
+swe_leica_daily = swe_gnss_leica.resample('D').median()
 sh_emlid_daily = sh_emlid.resample('D').median()
-swe_emlid_daily = swe_emlid.resample('D').median()
-sh_manual_daily = manual2.Acc.astype('float64')*10
-swe_manual_daily = manual2.SWE_aboveAnt.astype('float64')
+swe_emlid_daily = swe_gnss_emlid.resample('D').median()
+sh_manual_daily = manual.Acc.astype('float64')*10
+swe_manual_daily = manual.SWE_aboveAnt.astype('float64')
 sh_laser_daily = sh.resample('D').median()
 swe_laser_daily = sh_laser_daily / 1000 * ipol
 for i in range(4):
@@ -240,7 +136,7 @@ for i in range(15):
     globals()[f"sh_poles{i+1}_daily"] = poles[str(i+1)].resample('D').median()
     globals()[f"swe_poles{i + 1}_daily"] = globals()[f"sh_poles{i+1}_daily"]/100*ipol
 
-""" 4. Calculate differences, linear regressions, RMSE & MRB between GNSS and reference data """
+""" 5. Calculate differences, linear regressions, RMSE & MRB between GNSS and reference data """
 # Q: calculate differences between GNSS (Leica) and reference data
 dsh_emlid_daily = (sh_emlid_daily - sh_leica_daily).dropna()
 dswe_emlid_daily = (swe_emlid_daily - swe_leica_daily).dropna()
@@ -264,7 +160,7 @@ diffs.columns = ['dsh_emlid', 'dswe_emlid', 'dsh_manual', 'dswe_manual', 'dsh_la
 all_daily = pd.concat([sh_leica_daily, sh_emlid_daily, swe_emlid_daily, sh_manual_daily, swe_manual_daily, sh_laser_daily, swe_laser_daily], axis=1)
 all_daily_nonan = all_daily.dropna()
 # merge scale and gnss data (30min)
-all_15min = pd.concat([sh_leica, sh_emlid, swe_laser_15min], axis=1)
+all_15min = pd.concat([sh_leica, sh_emlid, swe_laser_resampled], axis=1)
 all_15min_nonan = all_15min.dropna()
 
 # SWE cross correation manual vs. GNSS (daily)
@@ -312,23 +208,23 @@ n_scale = len(dswe_laser_daily)
 print('Number of samples (scale vs. GNSS, 30min): %.0f' % n_scale)
 
 
-''' 5. Plot results (SWE, ΔSWE, scatter) '''
-os.makedirs(data_path + '/plots/', exist_ok=True)
+''' 6. Plot results (SWE, ΔSWE, scatter) '''
+os.makedirs(dst_path + 'plots/', exist_ok=True)
 
 # Q: plot SWE
 # plot SWE Leica, Emlid, laser, buoy, poles
 plt.figure()
-swe_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
-swe_emlid.plot(color='salmon', linestyle='--')
+swe_gnss_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
+swe_gnss_emlid.plot(color='salmon', linestyle='--')
 swe_manual_daily.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
 plt.errorbar(swe_manual_daily.index, swe_manual_daily, yerr=swe_manual_daily/10, color='darkblue', linestyle='',capsize=4, alpha=0.5)
-swe_laser_15min.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+swe_laser_resampled.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
 for i in range(4):
     (globals()[f"swe_buoy{i + 1}_daily"][(globals()[f"swe_buoy{i + 1}_daily"] < globals()[f"swe_buoy{i + 1}_daily"].median() + 2 * globals()[f"swe_buoy{i + 1}_daily"].std())]).plot(color='lightgrey', linestyle='-').grid()
 for i in range(15):
     globals()[f"swe_poles{i + 1}_daily"].plot(linestyle=':', alpha=0.6, legend=False).grid()
-plt.fill_between(swe_leica.index, swe_leica - swe_leica/10, swe_leica + swe_leica/10, color="crimson", alpha=0.2)
-plt.fill_between(swe_emlid.index, swe_emlid - swe_emlid/10, swe_emlid + swe_emlid/10, color="salmon", alpha=0.2)
+plt.fill_between(swe_gnss_leica.index, swe_gnss_leica - swe_gnss_leica/10, swe_gnss_leica + swe_gnss_leica/10, color="crimson", alpha=0.2)
+plt.fill_between(swe_gnss_emlid.index, swe_gnss_emlid - swe_gnss_emlid/10, swe_gnss_emlid + swe_gnss_emlid/10, color="salmon", alpha=0.2)
 plt.xlabel(None)
 plt.ylabel('SWE (mm w.e.)', fontsize=14)
 plt.legend(['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
@@ -411,8 +307,8 @@ plt.close()
 plt.figure()
 sh_leica.dropna().plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
 sh_emlid.dropna().plot(color='salmon', linestyle='--')
-(manual2.Acc.astype('float64')*10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-plt.errorbar((manual2.Acc.astype('float64')*10).index, (manual2.Acc.astype('float64')*10), yerr=(manual2.Acc.astype('float64')*10)/10, color='darkblue', linestyle='',capsize=4, alpha=0.5)
+(manual.Acc.astype('float64')*10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+plt.errorbar((manual.Acc.astype('float64')*10).index, (manual.Acc.astype('float64')*10), yerr=(manual.Acc.astype('float64')*10)/10, color='darkblue', linestyle='',capsize=4, alpha=0.5)
 sh.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
 for i in range(15):
     poles[str(i+1)].dropna().plot(linestyle=':', alpha=0.6, legend=False).grid()
@@ -436,7 +332,7 @@ plt.show()
 # plot Difference in Accumulation (compared to Leica)
 plt.figure()
 (sh_emlid.resample('D').median()-sh_leica.resample('D').median()).dropna().plot(color='salmon', linestyle='--', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
-((manual2.Acc.astype('float64')*10).resample('D').median()-sh_leica.resample('D').median()).dropna().plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+((manual.Acc.astype('float64')*10).resample('D').median()-sh_leica.resample('D').median()).dropna().plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
 (sh.resample('D').median()-sh_leica.resample('D').median()).dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
 for i in range(4):
     (globals()[f"dsh_buoy{i+1}_daily"][(globals()[f"dsh_buoy{i+1}_daily"] < globals()[f"dsh_buoy{i+1}_daily"].median() + 2 * globals()[f"dsh_buoy{i+1}_daily"].std())]).plot(color='lightgrey', linestyle='-').grid()
@@ -445,7 +341,8 @@ for i in range(15):
 plt.xlabel(None)
 plt.ylabel('$\Delta$Snow accumulation (mm)', fontsize=14)
 plt.legend(['Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='best')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))plt.xticks(fontsize=14)
+plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
+plt.xticks(fontsize=14)
 plt.yticks(fontsize=14)
 #plt.show()
 plt.savefig('data_neumayer/plots/Delta_Acc_all_2021_22.png', bbox_inches='tight')
@@ -471,8 +368,8 @@ for i in range(15):
 
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
 plt.figure()
-swe_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
-swe_emlid.plot(color='salmon', linestyle='--')
+swe_gnss_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
+swe_gnss_emlid.plot(color='salmon', linestyle='--')
 plt.errorbar((manual.SWE_aboveAnt.astype('float64')).index, (manual.SWE_aboveAnt.astype('float64')), yerr=(manual.SWE_aboveAnt.astype('float64'))/10, color='k', linestyle='',capsize=4, alpha=0.5)
 sh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
 (manual.Acc.astype('float64')*10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
@@ -486,7 +383,8 @@ plt.errorbar(manual.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt/10, col
 plt.xlabel(None)
 plt.ylabel('SWE (mm w.e.)', fontsize=14)
 plt.legend(['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)', 'Manual', 'Density (kg/m3)'], fontsize=11, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))plt.xticks(fontsize=14)
+plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
+plt.xticks(fontsize=14)
 plt.yticks(fontsize=14)
 #plt.show()
 plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
@@ -496,12 +394,13 @@ plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', 
 # plot Difference in SWE (compared to Leica), fitting above plot
 plt.figure()
 ((sh_emlid.resample('D').median()-sh_leica.resample('D').median())/1000*ipol).dropna().plot(color='salmon', linestyle='--', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
-(((manual2.Acc.astype('float64')*10).resample('D').median()-sh_leica.resample('D').median())/1000*ipol).dropna().plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
+(((manual.Acc.astype('float64')*10).resample('D').median()-sh_leica.resample('D').median())/1000*ipol).dropna().plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
 ((sh.resample('D').median()-sh_leica.resample('D').median())/1000*ipol).dropna().plot(color='k', linestyle='--', label='Accumulation (cm)').grid()
 plt.xlabel(None)
 plt.ylabel('$\Delta$SWE (mm w.e.)', fontsize=14)
 plt.legend(['Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))plt.xticks(fontsize=14)
+plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
+plt.xticks(fontsize=14)
 plt.yticks(fontsize=14)
 #plt.show()
 plt.savefig('data_neumayer/plots/Delta_SWE_Emlid_Manual_Laser_2021_22.png', bbox_inches='tight')
@@ -511,12 +410,13 @@ plt.savefig('data_neumayer/plots/Delta_SWE_Emlid_Manual_Laser_2021_22.pdf', bbox
 # plot Difference in Accumulation (compared to Leica), fitting above plot
 plt.figure()
 ((sh_emlid.resample('D').median()-sh_leica.resample('D').median())).dropna().plot(color='salmon', linestyle='--', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
-(((manual2.Acc.astype('float64')*10).resample('D').median()-sh_leica.resample('D').median())).dropna().plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+(((manual.Acc.astype('float64')*10).resample('D').median()-sh_leica.resample('D').median())).dropna().plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
 ((sh.resample('D').median()-sh_leica.resample('D').median())).dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
 plt.xlabel(None)
 plt.ylabel('$\Delta$Accumulation (mm)', fontsize=14)
 plt.legend(['Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))plt.xticks(fontsize=14)
+plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
+plt.xticks(fontsize=14)
 plt.yticks(fontsize=14)
 #plt.show()
 plt.savefig('data_neumayer/plots/Delta_Acc_Emlid_Manual_Laser_2021_22.png', bbox_inches='tight')
@@ -544,6 +444,7 @@ axes[0].set_ylabel('$\Delta$Lat (cm)', fontsize=14)
 axes[1].set_ylabel('$\Delta$Lon (cm)', fontsize=14)
 axes[2].set_ylabel('$\Delta$H (cm)', fontsize=14)
 plt.xlabel(None)
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))plt.show()
+plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
+plt.show()
 plt.savefig('plots/LLH_base.png', bbox_inches='tight')
 plt.savefig('plots/LLH_base.pdf', bbox_inches='tight')
