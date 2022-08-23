@@ -1,4 +1,4 @@
-""" Script to generate daily rinex 3.0x files from day-overlapping Emlid rinex files;
+""" Functions to generate daily rinex 3.0x files from day-overlapping Emlid rinex files;
     Necessary preprocessing for daily file processing with RTKLib
     created by: L. Steiner
     created on: 17.05.2021
@@ -15,7 +15,6 @@ import tarfile
 import time
 import gnsscal
 import datetime as dt
-
 import pandas as pd
 from termcolor import colored
 
@@ -99,6 +98,7 @@ def check_existing_files(dest_path, rover):
     print(colored('newest doy in existing files of parent dir: %s' % doy_max, 'blue'))
 
     return year_max, doy_max
+
 
 def copy_file_no_overwrite(source_path, dest_path, file_name):
     """ copy single files without overwriting existing files
@@ -518,13 +518,13 @@ def run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file
     print(stderr)  # print processing errors
 
 
-def get_rtklib_solutions(dest_path, rover_name, resolution, ending):
+def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_length):
     """  get daily rtklib ENU solution files from solution directory and store all solutions in one (whole season) dataframe and pickle
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :param rover_name: name of rover
     :param resolution: processing time interval (in minutes)
     :param ending: suffix of solution file names (e.g. a varian of processing options: '_noglonass'
-    :return df_enu: pandas dataframe containing all seasons solution data columns ['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u']
+    :return: df_enu (pandas dataframe containing all seasons solution data columns ['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'])
     """
     # create empty dataframe for all .ENU solution files
     df_enu = pd.DataFrame()
@@ -533,7 +533,7 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending):
     print(colored('\n\nstart reading all ENU solution files from receiver: %s' % rover_name, 'blue'))
     for file in glob.iglob(dest_path + 'sol/' + rover_name + '/' + resolution + '/*' + ending + '.pos', recursive=True):
         print('\nreading ENU file: %s' % file)
-        enu = pd.read_csv(file, header=26, delimiter=' ', skipinitialspace=True, index_col=['date_time'],
+        enu = pd.read_csv(file, header=header_length, delimiter=' ', skipinitialspace=True, index_col=['date_time'],
                           na_values=["NaN"],
                           usecols=[0, 1, 4, 5, 6, 9], names=['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'],
                           parse_dates=[['date', 'time']])
@@ -549,5 +549,84 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending):
     return df_enu
 
 
+def filter_rtklib_solutions(dest_path, df_enu, rover_name, resolution, ambiguity=[1, 2, 5], ti_set_swe2zero=12, threshold=3, window='D', resample=[True, False], resample_resolution='30min', ending=''):
+    """ filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening)
+    :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
+    :param df_enu: pandas dataframe containing all seasons solution data columns ['date', 'time', 'U (m)', 'amb_state', 'nr_sat', 'std_u (m)']
+    :param rover_name: name of rover
+    :param resolution: processing time interval (in minutes)
+    :param ambiguity: ambiguity resolution state [1: fixed, 2: float, 5: standalone]
+    :param ti_set_swe2zero: number of hours used to set swe to zero (default=12 hours)
+    :param threshold: set threshold for outlier removing using the standard deviation (default=3 sigma)
+    :param window: window for median filter (default='D')
+    :param resample: resample data to match the reference data's resolution (True) or not (False)
+    :param resample_resolution: resolution for resampling the data (e.g., the resolution of the reference data)
+    :param ending: suffix of solution file names (e.g. a varian of processing options: '_noglonass'
+    :return: df_enu, fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
+    """
+    # Q: read all data from .pkl if no df_enu is provided
+    if df_enu is None:
+        print(colored('\nENU solution dataframe is NOT available, reading from pickle: %s' % 'sol/' + rover_name + '_' + resolution + ending + '.pkl', 'yellow'))
+        df_enu = pd.read_pickle(dest_path + 'sol/' + rover_name + '_' + resolution + ending + '.pkl')
+
+    print(colored('\nENU solution dataframe is available, start filtering data', 'blue'))
+
+    # Q: select only data where ambiguities are fixed (amb_state==1) or float (amb_state==2) and sort datetime index
+    print('\nselect data with ambiguity solution state: %s' % ambiguity)
+    fil_df = pd.DataFrame(df_enu[(df_enu.amb_state == ambiguity)])
+    fil_df.index = pd.DatetimeIndex(fil_df.index)
+    fil_df = fil_df.sort_index()
+
+    # adapt up values to reference SWE values in mm (median of first hours)
+    swe_zero = int((60/int(resolution[:2]))*ti_set_swe2zero)    # get number of observations to use to set swe to zero
+    fil = (fil_df.U - fil_df.U[:swe_zero].median()) * 1000
+
+    # Q: remove outliers based on x*sigma threshold
+    print('\nremove outliers based on %s * sigma threshold' % threshold)
+    upper_limit = fil.median() + threshold * fil.std()
+    lower_limit = fil.median() - threshold * fil.std()
+    fil_clean = fil[(fil > lower_limit) & (fil < upper_limit)]
+
+    # Q: filter data with a rolling median and, if necessary, resample resolution to fit reference data resolution
+    if resample is True:
+        print('\ndata is median filtered (window length = %s) and resampled to %s resolution' % window % resample_resolution)
+        resolution = resample_resolution
+        m = fil_clean.rolling(window).median().resample(resample_resolution).median()
+    else:
+        print('\ndata is median filtered with window length: %s' % window)
+        m = fil_clean.rolling(window).median()
+    s = fil_clean.rolling(window).std()
+
+    # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
+    print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
+    jump = m[(m.diff() < -1000)]  # detect jumps (> 1000mm) in the dataset
+
+    if jump.empty is True:
+        print('\nno jump detected!')
+        swe_gnss = m - m[0]
+    else:
+        print('\njump of height %s is detected!' % jump[0])
+        adj = m[(m.index > jump.index.format()[0])] - jump[0]  # correct jump [0]
+        m_adj = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
+        swe_gnss = m_adj - m_adj[0]
+
+    swe_gnss.index = swe_gnss.index + pd.Timedelta(seconds=18)
+
+    # resample data per day, calculate median and standard deviation (noise) per day to fit manual reference data
+    swe_gnss_daily = swe_gnss.resample('D').median()
+    std_gnss_daily = swe_gnss.resample('D').std()
+
+    # Q: store swe results to pickle
+    print(colored('\ndata is filtered, cleaned, and corrected and SWE results are stored to pickle and .csv: %s' % 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
+    os.makedirs(dest_path + 'sol/SWE_results/', exist_ok=True)
+    swe_gnss.to_pickle(dest_path + 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
+    swe_gnss.to_csv(dest_path + 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.csv')
+
+    return df_enu, fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
 
 
+def xx(dest_path, swe_gnss, rover_name, resolution, ending):
+    # read gnss swe results from pickle
+    if swe_gnss is None:
+        print(colored('\nSWE results are NOT available, reading from pickle: %s' % 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl', 'orange'))
+        swe_gnss = pd.read_pickle(dest_path + 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
