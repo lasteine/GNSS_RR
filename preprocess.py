@@ -13,6 +13,8 @@ import shutil
 import lzma
 import tarfile
 import time
+import gnsscal
+import datetime as dt
 
 import pandas as pd
 from termcolor import colored
@@ -39,6 +41,9 @@ def remove_folder(dest_path):
     """
     shutil.rmtree(dest_path)
     print(colored("\n!!! temporary directory removed: %s" % dest_path, 'blue'))
+
+
+""" Define preprocessing functions """
 
 
 def move_files2parentdir(dest_path, f):
@@ -422,6 +427,126 @@ def dayoverlapping2daily_rinexfiles(dest_path, rover_prefix, receiver, move=[Tru
     # rename merged (daily) rinex files to match rtklib input format [rover_prefix + doy + '0.' + yy + 'o'] & move to parent directory & delete temp dir
     rename_merged_rinexfiles(dest_path, receiver, move, delete_temp)
 
+
+""" Define RTKLIB functions """
+
+
+def automate_rtklib_pp(dest_path, rover_prefix, yy, ti_int, base_prefix, brdc_nav_prefix, precise_nav_prefix, resolution, ending, doy_start=0, doy_end=366, rover_name=['NMER_original', 'NMER', 'NMLR'], options=['options_Emlid', 'options_Leica']):
+    """ create input and output files for running RTKLib post processing automatically
+        for all rover rinex observation files (. yyo) available in the data path directory
+        get doy from rover file names with name structure:
+            Leica Rover: '33933650.21o' [rover + doy + '0.' + yy + 'o']
+            Emlid Rover (pre-processed): 'NMER3650.21o' [rover + doy + '0.' + yy + 'o']
+            Emlid Rover (original): 'ReachM2_sladina-raw_202112041058.21O' [rover + datetime + '.' + yy + 'O']
+        :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file (all data needs to be in one folder)
+        :param rover_prefix: prefix of rover rinex filename
+        :param yy: year to process
+        :param doy_start: start day of year (doy) for processing files, range (0, 365)
+        :param doy_end: end doy for processing files, range (1, 366)
+        :param resolution: processing time interval (in minutes)
+        :param ending: suffix of solution file names (e.g. a varian of processing options: '_noglonass'
+        :param ti_int: processing time interval (in seconds)
+        :param base_prefix: prefix of base rinex filename
+        :param brdc_nav_prefix: prefix of broadcast navigation filename
+        :param precise_nav_prefix: prefix of precise orbit filename
+        :param rover_name: name of rover
+        :param options: rtkpost configuration file
+    """
+    # Q: run rtklib for all rover files in directory
+    print(colored('\n\nstart processing files with RTKLIB from receiver: %s' % rover_name, 'blue'))
+    for file in glob.iglob(dest_path + rover_prefix + '*.' + yy + 'O', recursive=True):
+        # Q: get doy from rover filenames
+        rover_file = os.path.basename(file)
+        if rover_name == 'NMER_original':
+            # get doy, converted from datetime in Emlid original filename format (output from receiver, non-daily files)
+            doy = dt.datetime.strptime(rover_file.split('.')[0].split('_')[2], "%Y%m%d%H%M").strftime('%j')
+        if rover_name == 'NMER' or rover_name == 'NMLR':
+            # get doy directly from filename from Emlid pre-processed or Leica file name format (daily files)
+            doy = rover_file.split('.')[0][4:7]
+
+        # only process files of selected year and inbetween the selected doy range
+        if doy_start <= int(doy) <= doy_end:
+            print('\nProcessing rover file: ' + rover_file, '; doy: ', doy)
+
+            # convert doy to gpsweek and day of week (needed for precise orbit file names)
+            (gpsweek, dow) = gnsscal.yrdoy2gpswd(int('20' + yy), int(doy))
+
+            # define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
+            base_file = base_prefix + doy + '0.' + yy + 'O'
+            broadcast_orbit_gps = brdc_nav_prefix + doy + '0.' + yy + 'n'
+            broadcast_orbit_glonass = brdc_nav_prefix + doy + '0.' + yy + 'g'
+            broadcast_orbit_galileo = brdc_nav_prefix + doy + '0.' + yy + 'l'
+            precise_orbit = precise_nav_prefix + str(gpsweek) + str(dow) + '.EPH_M'
+            output_file = 'sol/' + rover_name + '/' + resolution + '/20' + yy + '_' + rover_name + doy + ending + '.pos'
+
+            # create a solution directory if not existing
+            os.makedirs(dest_path + 'sol/' + rover_name + '/' + resolution + '/', exist_ok=True)
+
+            # Q: change directory to data directory & run RTKLib post processing command
+            run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file,
+                          broadcast_orbit_gps, broadcast_orbit_glonass, broadcast_orbit_galileo, precise_orbit)
+
+    print(colored('\n\nfinished processing all files with RTKLIB from receiver: %s' % rover_name, 'blue'))
+
+
+def run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file, brdc_orbit_gps, brdc_orbit_glonass, brdc_orbit_galileo, precise_orbit):
+    """ run RTKLib post processing command (rnx2rtkp) as a subprocess (instead of manual RTKPost GUI)
+        example: 'rnx2rtkp -k rtkpost_options.conf -ti 900 -o sol/NMLR/15min/NMLRdoy.pos NMLR0040.17O NMLB0040.17O NMLB0040.17n NMLB0040.17g NMLB0040.17e COD17004.eph'
+        :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file (all data needs to be in one folder)
+        :param options: rtkpost configuration file
+        :param ti_int: processing time interval (in seconds)
+        :param output_file: rtkpost solution file
+        :param rover_file: GNSS observation file (rinex) from the rover receiver
+        :param base_file: GNSS observation file (rinex) from the base receiver
+        :param brdc_orbit_gps: GNSS broadcast (predicted) orbit for GPS satellites
+        :param brdc_orbit_glonass: GNSS broadcast (predicted) orbit for GLONASS satellites
+        :param brdc_orbit_galileo: GNSS broadcast (predicted) orbit for GALILEO satellites
+        :param precise_orbit: GNSS precise (post processed) orbit for multi-GNSS (GPS, GLONASS, GALILEO, BEIDOU)
+    """
+    # change directory & run RTKLIB post processing command
+    process = subprocess.Popen('cd ' + dest_path + ' && rnx2rtkp '
+                               '-k ' + options + '.conf '
+                               '-ti ' + ti_int + ' '
+                               '-o ' + output_file + ' '
+                               + rover_file + ' ' + base_file + ' ' + brdc_orbit_gps + ' ' + brdc_orbit_glonass + ' ' + brdc_orbit_galileo + ' ' + precise_orbit,
+                               shell=True,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+
+    stdout, stderr = process.communicate()
+    # print(stdout) # print processing output
+    print(stderr)  # print processing errors
+
+
+def get_rtklib_solutions(dest_path, rover_name, resolution, ending):
+    """  get daily rtklib ENU solution files from solution directory and store all solutions in one (whole season) dataframe and pickle
+    :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
+    :param rover_name: name of rover
+    :param resolution: processing time interval (in minutes)
+    :param ending: suffix of solution file names (e.g. a varian of processing options: '_noglonass'
+    :return df_enu: pandas dataframe containing all seasons solution data columns ['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u']
+    """
+    # create empty dataframe for all .ENU solution files
+    df_enu = pd.DataFrame()
+
+    # Q read all .ENU files in solution directory, parse date and time columns to datetimeindex and add them to the dataframe
+    print(colored('\n\nstart reading all ENU solution files from receiver: %s' % rover_name, 'blue'))
+    for file in glob.iglob(dest_path + 'sol/' + rover_name + '/' + resolution + '/*' + ending + '.pos', recursive=True):
+        print('\nreading ENU file: %s' % file)
+        enu = pd.read_csv(file, header=26, delimiter=' ', skipinitialspace=True, index_col=['date_time'],
+                          na_values=["NaN"],
+                          usecols=[0, 1, 4, 5, 6, 9], names=['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'],
+                          parse_dates=[['date', 'time']])
+        df_enu = pd.concat([df_enu, enu], axis=0)
+
+    # store dataframe as binary pickle format
+    df_enu.to_pickle(dest_path + 'sol/' + rover_name + '_' + resolution + ending + '.pkl')
+
+    print(colored('\nstored all ENU solution data in dataframe df_enu:', 'blue'))
+    print(df_enu)
+    print(colored('\nstored all ENU solution data in pickle: ' + 'sol/' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
+
+    return df_enu
 
 
 

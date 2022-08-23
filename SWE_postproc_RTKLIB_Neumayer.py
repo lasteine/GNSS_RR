@@ -30,7 +30,6 @@ import preprocess
 
 
 # CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
-yy = str(21)
 data_path = 'data_neumayer'
 scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'    # data source path at AWI server (data copied from Antarctica via O2A)
 dst_path = 'C:/Users/sladina.BGEO02P102/Documents/Paper_SWE_RTK/Run_RTKLib/data_neumayer/'
@@ -45,8 +44,9 @@ resolution = '15min'
 options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer'
 options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neumayer_900_15'
 ending = ''             # e.g. a variant of the processing '_eleambmask15', '_noglonass'
+yy = str(22)
 start_doy = 0
-end_doy = 366
+end_doy = 5
 
 
 """ 0. Preprocess data """
@@ -56,82 +56,22 @@ preprocess.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR
 preprocess.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True, move=True, delete_temp=True)    # for leica base: NMLB
 
 
-
-# TODO: write functions for processing and plotting
 """ 1. run RTKLib automatically (instead of RTKPost Gui manually) """
-# Q: run rtklib for all rover files in directory
-for file in glob.iglob(data_path + '/' + rover + '*.' + yy + 'O', recursive=True):
-    ''' get doy from rover file names with name structure:
-        Leica Rover: '33933650.21o' [rover + doy + '0.' + yy + 'o']
-        Emlid Rover (pre-processed): 'NMER3650.21o' [rover + doy + '0.' + yy + 'o']
-        Emlid Rover (original): 'ReachM2_sladina-raw_202112041058.21O' [rover + datetime + '.' + yy + 'O']
-        '''
-    rover_file = os.path.basename(file)
-    if rover_name == 'NMER_original':  # Emlid original format (output from receiver, non-daily files)
-        doy = dt.datetime.strptime(rover_file.split('.')[0].split('_')[2], "%Y%m%d%H%M").strftime('%j')
-        options = options_Emlid
-    if rover_name == 'NMER':       # Emlid pre-processed format (daily files)
-        doy = rover_file.split('.')[0][4:7]
-        options = options_Emlid
-    if rover_name == 'NMLR':
-        doy = rover_file.split('.')[0][4:7]
-        options = options_Leica
-    print('\nRover file: ' + rover_file, '\ndoy: ', doy)
+# process data using RTKLIB post processing command line tool 'rnx2rtkp' for a specific year and a range of day of years (doys)
+preprocess.automate_rtklib_pp(dst_path, 'NMER', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy, 'NMER', options_Emlid)
+preprocess.automate_rtklib_pp(dst_path, '3393', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy, 'NMLR', options_Leica)
 
-    if int(doy) >= start_doy & int(doy) <= end_doy:
-
-        # convert doy to gpsweek and day of week
-        (gpsweek, dow) = gnsscal.yrdoy2gpswd(int('20' + yy), doy)
-
-        # Q: define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
-        base_file = base + doy + '0.' + yy + 'O'
-        broadcast_orbit_gps = nav + doy + '0.' + yy + 'n'
-        broadcast_orbit_glonass = nav + doy + '0.' + yy + 'g'
-        broadcast_orbit_galileo = nav + doy + '0.' + yy + 'l'
-        precise_orbit = sp3 + str(gpsweek) + str(dow) + '.EPH_M'
-        output_file = 'sol/' + rover_name + '/20' + yy + '_' + rover_name + doy + '.pos'
-
-        # Q: change directory & run RTKLib post processing command
-        # example command to run RTKLib:
-        # 'rnx2rtkp -k rtkpost_options.conf -ti 900 -o sol/NMLR/15min/NMLRdoy.pos NMLR0040.17O NMLB0040.17O NMLB0040.17n NMLB0040.17g NMLB0040.17e COD17004.eph'
-        os.makedirs(data_path + '/sol/', exist_ok=True)
-        process = subprocess.Popen('cd ' + data_path + ' && rnx2rtkp '
-                                   '-k ' + options + '.conf '
-                                   '-ti ' + ti_int + ' '
-                                   '-o ' + output_file + ' '
-                                   + rover_file + ' ' + base_file + ' ' + broadcast_orbit_gps + ' ' + broadcast_orbit_glonass + ' ' + broadcast_orbit_galileo + ' ' + precise_orbit,
-                                   shell=True,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE)
-
-        stdout, stderr = process.communicate()
-        # print(stdout) # print processing output
-        print(stderr)  # print processing errors
-
-        # remove .stat files
-        if os.path.exists(data_path + '/' + output_file + '.stat'):
-            os.remove(data_path + '/' + output_file + '.stat')
-
-print('\n\nfinished with all files :-)')
 
 
 """ 2. Get rtklib ENU solution files"""
-# create empty dataframe for all .ENU solution files
-df_enu = pd.DataFrame()
+# tODO: check no header in df_enu
+df_enu_emlid = preprocess.get_rtklib_solutions(dst_path, 'NMER', resolution, ending)
+df_enu_leica = preprocess.get_rtklib_solutions(dst_path, 'NMLR', resolution, ending)
 
-# Q read all .ENU files in folder, parse date and time columns to datetimeindex and add them to the dataframe
-for file in glob.iglob(data_path + '/sol/' + rover + '/' + resolution + '/*' + ending + '.pos', recursive=True):
-    print(file)
-    enu = pd.read_csv(file, header=24, delimiter=' ', skipinitialspace=True, index_col=['date_time'], na_values=["NaN"],
-                      usecols=[0, 1, 4, 5, 6, 9], names=['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'],
-                      parse_dates=[['date', 'time']])
-    df_enu = pd.concat([df_enu, enu], axis=0)
-
-# store dataframe as binary pickle format
-# df_enu.to_pickle(data_path + '/sol/' + rover_name + '_' + resolution + ending + '.pkl')
 
 # hier wäre gut: globals()[f"df_enu{ending}"] = df_enu
 
+# TODO: write functions
 # TODO: check where to implement generic variable names
 # # import RTKLib solution files from different solution variants
 # globals()[f"df_enu{ending}"] = df_enu
