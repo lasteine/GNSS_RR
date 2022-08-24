@@ -634,6 +634,9 @@ def read_swe_gnss(dest_path, swe_gnss, rover_name, resolution, ending):
     return swe_gnss
 
 
+""" Define reference sensors functions """
+
+
 def read_manual_observations(dest_path):
     """ read and interpolate manual accumulation (cm), density (kg/m^3), SWE (mm w.e.) data
         :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
@@ -863,6 +866,9 @@ def convert_swe2sh_gnss(swe_gnss, ipol_density=None):
     gnss.columns = [['dswe', 'dsh', 'dsh_const']]
 
     return gnss
+
+
+""" Define combined GNSS and reference sensors functions """
 
 
 def resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser):
