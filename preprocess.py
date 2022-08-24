@@ -636,8 +636,8 @@ def read_swe_gnss(dest_path, swe_gnss, rover_name, resolution, ending):
 
 def read_manual_observations(dest_path):
     """ read and interpolate manual accumulation (cm), density (kg/m^3), SWE (mm w.e.) data
-    :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
-    :return: manual2, ipol
+        :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
+        :return: manual2, ipol
     """
     # read data
     print('\nread manual observations')
@@ -647,17 +647,21 @@ def read_manual_observations(dest_path):
     manual2 = manual
     manual2.index = manual2.index + pd.Timedelta(days=0.2)
 
+    # fix dtype of column "Acc" and convert to mm
+    manual2.Acc = manual2.Acc.astype('float64') * 10
+
     # interpolate manual data
-    print('\ninterpolate manual reference observations')
+    print('\n-- interpolate manual reference observations')
     ipol = manual.Density_aboveAnt.resample('min').interpolate(method='linear', limit_direction='backward')
 
     return manual2, ipol
 
 
-def read_snowbuoy_observations(dest_path):
-    """ read snow buoy accumulation data from four sensors & pressure, airtemp
-    :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
-    :return: buoy
+def read_snowbuoy_observations(dest_path, ipol_density=None):
+    """ read snow buoy accumulation data from four sensors and convert to SWE & pressure, airtemp
+        :param ipol_density: interpolated density data from manual reference observations
+        :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
+        :return: buoy
     """
     # Q: read snow buoy data
     print('\nread snow buoy observations')
@@ -670,33 +674,52 @@ def read_snowbuoy_observations(dest_path):
     # select only data from season 21/22
     buoy = buoy_all['2021-11-26':]
 
-    # Q: Differences in accumulation
+    # Q: Differences in accumulation & conversion to SWE
     # calculate change in accumulation (in mm) for each buoy sensor add it as an additional column to the dataframe buoy
-    for i in range(4):
-        buoy['dsh' + str(i+1)] = (buoy['sh' + str(i + 1)] - buoy['sh' + str(i + 1)][0]) * 1000
+    buoy_change = (buoy[['sh1', 'sh2', 'sh3', 'sh4']]-buoy[['sh1', 'sh2', 'sh3', 'sh4']][:1].values[0]) * 1000
+    buoy_change.columns = ['dsh1', 'dsh2', 'dsh3', 'dsh4']
 
-        # calculate accumulation gain on 2021-12-23
-        print('Accumulation gain on 2021-12-23 for buoy dsh' + str(i + 1) + ': ',
-              round(buoy['dsh' + str(i+1)].dropna()['2021-12-23'][1], 1))
+    # convert snow accumulation to SWE (with interpolated and constant density values)
+    print('\n-- convert buoy observations to SWE')
+    buoy_swe = convert_sh2swe(buoy_change, ipol_density)
+    buoy_swe.columns = ['dswe1', 'dswe2', 'dswe3', 'dswe4']
+
+    buoy_swe_constant = convert_sh2swe(buoy_change)
+    buoy_swe_constant.columns = ['dswe_const1', 'dswe_const2', 'dswe_const3', 'dswe_const4']
+
+    # append new columns to existing buoy dataframe
+    buoy = pd.concat([buoy, buoy_change, buoy_swe, buoy_swe_constant], axis=1)
 
     return buoy
 
 
-def read_pole_observations(dest_path):
-    """ read Pegelfeld Spuso accumulation data from 16 poles
-    :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
-    :return: poles
+def read_pole_observations(dest_path, ipol_density=None):
+    """ read Pegelfeld Spuso accumulation data from 16 poles and convert to SWE
+        :param ipol_density: interpolated density data from manual reference observations
+        :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
+        :return: poles
     """
+    # Q: read Pegelfeld Spuso pole observations
     print('\nread Pegelfeld Spuso pole observations')
     poles = pd.read_csv(dest_path + '03_Densitypits/Pegelfeld_Spuso_Akkumulation.csv', header=0, delimiter=';',
                         index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True)
 
+    # Q: convert snow accumulation to SWE (with interpolated and constant density values)
+    print('\n-- convert Pegelfeld Spuso pole observations to SWE')
+    poles_swe = convert_sh2swe(poles, ipol_density)
+    poles_swe.columns = ['dswe'] + poles_swe.columns
+
+    poles_swe_constant = convert_sh2swe(poles)
+    poles_swe_constant.columns = ['dswe_const'] + poles_swe_constant.columns
+
+    # append new columns to existing poles dataframe
+    poles = pd.concat([poles, poles_swe, poles_swe_constant], axis=1)
+
     return poles
 
 
-def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_shm.pkl', resample_resolution='15min'):
+def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_laser.pkl'):
     """ read snow accumulation observations (minute resolution) from laser distance sensor data
-    :param resample_resolution: resolution for resampling the data (e.g., the resolution of the reference data)
     :param ipol: interpolated density data from manual reference observations
     :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., 'shm/nm_shm.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
@@ -706,92 +729,151 @@ def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_shm.pkl', resa
     if laser_pickle is None:
         print(colored('\nlaser observations are NOT available as pickle, reading all logfiles: shm/nm*.log', 'yellow'))
         # create empty dataframe for all .log files
-        df_shm = pd.DataFrame()
+        laser = pd.DataFrame()
         # read all snow accumulation.log files in folder, parse date and time columns to datetimeindex and add them to the dataframe
         for file in glob.iglob(dest_path + 'shm/nm*.log', recursive=True):
             print(file)
             # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
-            shm = pd.read_csv(file, header=0, delimiter=r'[ >]', skipinitialspace=True, na_values=["NaN"], names=['date', 'time', 'none','h', 'signal', 'temp', 'error', 'check'], usecols=[0,1,3,5,6],
+            shm = pd.read_csv(file, header=0, delimiter=r'[ >]', skipinitialspace=True, na_values=["NaN"], names=['date', 'time', 'none','sh', 'signal', 'temp', 'error', 'check'], usecols=[0,1,3,5,6],
                               encoding='latin1', parse_dates=[['date', 'time']], index_col=['date_time'], engine='python', dayfirst=True)
-            df_shm = pd.concat([df_shm, shm], axis=0)
+            laser = pd.concat([laser, shm], axis=0)
+
+        # calculate change in accumulation (in mm) and add it as an additional column to the dataframe
+        laser['dsh'] = (laser['sh'] - laser['sh'][0]) * 1000
 
         # store as .pkl
-        df_shm.to_pickle(dest_path + 'shm/nm_shm.pkl')
+        laser.to_pickle(dest_path + 'shm/nm_laser.pkl')
 
     else:
-        print(colored('\nlaser observations are available as pickle: %s' % laser_pickle, 'yellow'))
-        df_shm = pd.read_pickle(dest_path + laser_pickle)
+        print(colored('\nlaser observations are available as pickle, reading: %s' % laser_pickle, 'yellow'))
+        laser = pd.read_pickle(dest_path + laser_pickle)
 
     # Q: filter laser observations
-    print('\nfiltering laser observations')
-    # select only observations without errors (in mm)
-    h = df_shm[(df_shm.error == 0)].h * 1000
-    # adapt to reference SWE values
-    fil_h = (h - h[0])
+    print('\n-- filtering laser observations')
+    # select only observations without errors
+    dsh = laser[(laser.error == 0)].dsh
 
     # clean outliers
-    ul = fil_h.median() + 1 * fil_h.std()
-    ll = fil_h.median() - 1 * fil_h.std()
-    fil_h_clean = fil_h[(fil_h > ll) & (fil_h < ul)]
+    ul = dsh.median() + 1 * dsh.std()
+    ll = dsh.median() - 1 * dsh.std()
+    fil_dsh = dsh[(dsh > ll) & (dsh < ul)]
 
-    # resample snow accumulation data
-    h_resampled = fil_h_clean.resample('6H').median()
-    h_std_resampled = fil_h_clean.resample('H').std()
-    sh = fil_h_clean.rolling('D').median()
-    sh_std = fil_h_clean.rolling('D').std()
+    # filter observations
+    dsh_laser = fil_dsh.rolling('D').median()
+    dsh_laser_std = fil_dsh.rolling('D').std()
 
     # Q: calculate SWE from accumulation data
-    # calculate SWE (swe = h[m] * density[kg/m3]) from snow accumulation and mean_density(0.5m)=408 from Hecht_2022
-    swe_laser_constant = (sh / 1000) * 408
-    swe_laser_constant_resampled = swe_laser_constant.resample(resample_resolution).median()
+    print('\n-- convert laser observations to SWE')
+    laser_swe = convert_sh2swe(dsh_laser, ipol_density=ipol)
+    laser_swe_constant = convert_sh2swe(dsh_laser)
 
-    # calculate SWE with interpolated density data from layers in depths above the buried antenna
-    swe_laser = (sh / 1000) * ipol
-    swe_laser_resampled = swe_laser.resample(resample_resolution).median()
+    # append new columns to existing poles dataframe
+    laser_filtered = pd.concat([dsh_laser, dsh_laser_std, laser_swe, laser_swe_constant], axis=1)
+    laser_filtered.columns = [['dsh', 'dsh_std', 'dswe', 'dswe_const']]
 
-    return df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled
+    return laser, laser_filtered
 
 
-def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], resample_resolution='30min', laser_pickle='shm/nm_shm.pkl'):
+def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='shm/nm_laser.pkl'):
     """ read reference sensor's observations from manual observations, a snow buoy sensor, a laser distance sensor and manual pole observations
     :param read_laser: read laser accumulation data (True) or not (False)
     :param read_poles: read poles accumulation data (True) or not (False)
     :param read_buoy: read buoy accumulation data (True) or not (False)
     :param read_manual: read manual observation data (True) or not (False)
-    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., 'shm/nm_shm.pkl') creating/containing snow accumulation observations from laser distance sensor
-    :param resample_resolution: resolution for resampling the data (e.g., the resolution of the reference data)
+    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., 'shm/nm_laser.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
-    :return: manual, ipol, buoy, poles, df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled
+    :return: manual, ipol, buoy, poles, laser, laser_filtered
     """
     print(colored('\n\nread reference observations', 'blue'))
+    # tODO: check manual and laser for read=False
 
     # Q: read manual accumulation (cm), density (kg/m^3), SWE (mm w.e.) data
     if read_manual is True:
         manual, ipol = read_manual_observations(dest_path)
     else:
-        manual, ipol = None
+        manual, ipol = None, None
 
     # Q: read snow buoy data (mm)
     if read_buoy is True:
-        buoy = read_snowbuoy_observations(dest_path)
+        buoy = read_snowbuoy_observations(dest_path, ipol_density=ipol)
     else:
         buoy = None
 
     # Q: read Pegelfeld Spuso accumulation data from poles
     if read_poles is True:
-        poles = read_pole_observations(dest_path)
+        poles = read_pole_observations(dest_path, ipol_density=ipol)
     else:
         poles = None
 
     # Q: read snow depth observations (minute resolution) from laser distance sensor data
     if read_laser is True:
-        df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled = read_laser_observations(dest_path, laser_pickle, ipol, resample_resolution)
+        laser, laser_filtered = read_laser_observations(dest_path, ipol, laser_pickle)
     else:
-        df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled = None
+        laser, laser_filtered = None, None
 
-    return manual, ipol, buoy, poles, df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled
+    print(colored('\n\nreference observations are loaded', 'blue'))
+
+    return manual, ipol, buoy, poles, laser, laser_filtered
 
 
+def convert_swe2sh(swe, ipol_density=None):
+    """ calculate snow accumulation from swe: sh[m]  = SWE [mm w.e.] * 1000 / density[kg/m3]) using a mean density values or interpolated densities
+    :param swe: dataframe containing swe values (in mm w.e.)
+    :param ipol_density: use interpolated values, input interpolated densitiy values, otherwise=None: constant value is used
+    :return: sh
+    """
+    if ipol_density is None:
+        # calculate snow accumulation (sh) from SWE and a mean_density(0.5m)=408 from Hecht_2022
+        sh = swe * 1000 / 408
+    else:
+        # calculate snow accumulation (sh) from SWE and interpolated density values (from manual Spuso observations)
+        sh = ((swe * 1000).divide(ipol_density, axis=0)).dropna()
 
+    return sh
+
+
+def convert_sh2swe(sh, ipol_density=None):
+    """ calculate swe from snow accumulation: swe[mm w.e.]  = (sh [mm] / 1000) * density[kg/m3]) using a mean density values or interpolated densities
+    :param sh: dataframe containing snow accumulation (height) values (in meters)
+    :param ipol_density: use interpolated values, input interpolated densitiy values, otherwise=None: constant value is used
+    :return: swe
+    """
+    if ipol_density is None:
+        # calculate SWE from snow accumulation (sh) and a mean_density(0.5m)=408 from Hecht_2022
+        swe = (sh / 1000) * 408
+    else:
+        # calculate SWE from snow accumulation (sh) and interpolated density values (from manual Spuso observations)
+        swe = ((sh / 1000).multiply(ipol_density, axis=0)).dropna()
+
+    return swe
+
+
+def convert_swe2sh_gnss(swe_gnss, ipol_density=None):
+    # Q: convert swe to snow accumulation and resample data '''
+    print('\n-- convert GNSS SWE estimations to snow accumulation changes')
+    sh_gnss = convert_swe2sh(swe_gnss, ipol_density)
+    sh_gnss_const = convert_swe2sh(swe_gnss)
+
+    # append new columns to existing gnss estimations dataframe
+    gnss = pd.concat([swe_gnss, sh_gnss, sh_gnss_const], axis=1)
+    gnss.columns = [['dswe', 'dsh', 'dsh_const']]
+
+    return gnss
+
+
+def resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser):
+    # resample sh and swe data (daily)
+    leica_daily = gnss_leica.resample('D').median()
+    emlid_daily = gnss_emlid.resample('D').median()
+
+    buoy_daily = buoy.resample('D').median()
+    poles_daily = poles.resample('D').median()
+    laser_daily = laser.resample('D').median()
+
+    return leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily
+
+
+def calculate_differences2gnss():
+    pass
 
 
