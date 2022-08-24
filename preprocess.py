@@ -849,7 +849,11 @@ def convert_sh2swe(sh, ipol_density=None):
 
 
 def convert_swe2sh_gnss(swe_gnss, ipol_density=None):
-    # Q: convert swe to snow accumulation and resample data '''
+    """ convert GNSS derived SWE to snow accumulation using interpolated or a mean density value. Add SWE and converted sh to one dataframe
+    :param swe_gnss: dataframe containing GNSS derived SWE estimations
+    :param ipol_density: use interpolated values, input interpolated densitiy values, otherwise=None: constant value is used
+    :return: gnss
+    """
     print('\n-- convert GNSS SWE estimations to snow accumulation changes')
     sh_gnss = convert_swe2sh(swe_gnss, ipol_density)
     sh_gnss_const = convert_swe2sh(swe_gnss)
@@ -862,10 +866,17 @@ def convert_swe2sh_gnss(swe_gnss, ipol_density=None):
 
 
 def resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser):
+    """ resample all sensors observations (different temporal resolutions) to daily resolution
+    :param gnss_leica: dataframe containing GNSS solutions (SWE, sh) from high-end system
+    :param gnss_emlid: dataframe containing GNSS solutions (SWE, sh) from low-cost system
+    :param buoy: dataframe containing snow buoy observations (SWE, sh)
+    :param poles: dataframe containing poles observations (SWE, sh)
+    :param laser: dataframe containing laser observations (SWE, sh)
+    :return: leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily
+    """
     # resample sh and swe data (daily)
     leica_daily = gnss_leica.resample('D').median()
     emlid_daily = gnss_emlid.resample('D').median()
-
     buoy_daily = buoy.resample('D').median()
     poles_daily = poles.resample('D').median()
     laser_daily = laser.resample('D').median()
