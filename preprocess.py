@@ -851,6 +851,9 @@ def convert_sh2swe(sh, ipol_density=None):
     return swe
 
 
+""" Define combined GNSS and reference sensors functions """
+
+
 def convert_swe2sh_gnss(swe_gnss, ipol_density=None):
     """ convert GNSS derived SWE to snow accumulation using interpolated or a mean density value. Add SWE and converted sh to one dataframe
     :param swe_gnss: dataframe containing GNSS derived SWE estimations
@@ -868,9 +871,6 @@ def convert_swe2sh_gnss(swe_gnss, ipol_density=None):
     return gnss
 
 
-""" Define combined GNSS and reference sensors functions """
-
-
 def resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser):
     """ resample all sensors observations (different temporal resolutions) to daily resolution
     :param gnss_leica: dataframe containing GNSS solutions (SWE, sh) from high-end system
@@ -884,13 +884,44 @@ def resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser):
     leica_daily = gnss_leica.resample('D').median()
     emlid_daily = gnss_emlid.resample('D').median()
     buoy_daily = buoy.resample('D').median()
-    poles_daily = poles.resample('D').median()
+    poles_daily = poles.resample('D').median().dropna()
     laser_daily = laser.resample('D').median()
 
     return leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily
 
 
-def calculate_differences2gnss():
-    pass
+def calculate_differences2gnss(emlid, leica, manual, laser, buoy, poles):
+    """ calculate differences between reference data and GNSS (Leica)
+    :param emlid: GNSS SWE/SH estimations from low-cost sensor
+    :param leica: GNSS SWE/SH estimtions from high-end sensor
+    :param manual: manual SWE/SH reference data
+    :param laser: SWE/SH observations from laser distance sensor
+    :param buoy: SWE/SH observations from snow buoy sensor
+    :param poles:SWE/SH observations from poles observations
+    :return: diffs_sh, diffs_swe
+    """
+    # calculate differences
+    dsh_emlid = (emlid.dsh - leica.dsh).dropna()
+    dswe_emlid = (emlid.dswe - leica.dswe).dropna()
+    dsh_manual = (manual.Acc - leica.dsh).dropna()
+    dswe_manual = (manual.SWE_aboveAnt - leica.dswe).dropna()
+    dsh_laser = (laser.dsh - leica.dsh).dropna()
+    dswe_laser = (laser.dswe - leica.dswe).dropna()
+    dsh_buoy = (buoy[['dsh1', 'dsh2', 'dsh3', 'dsh4']].subtract(leica.dsh, axis='index')).dropna()
+    dswe_buoy = (buoy[['dswe1', 'dswe2', 'dswe3', 'dswe4']].subtract(leica.dswe, axis='index')).dropna()
+    dsh_poles = (poles[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']].subtract(leica.dsh, axis='index')).dropna()
+    dswe_poles = (poles[['dswe1', 'dswe2', 'dswe3', 'dswe4', 'dswe5', 'dswe6', 'dswe7', 'dswe8', 'dswe9', 'dswe10', 'dswe11', 'dswe12', 'dswe13', 'dswe14', 'dswe15', 'dswe16']].subtract(leica.dswe, axis='index')).dropna()
 
+    # concatenate all difference dataframes
+    diffs_sh = pd.concat([dsh_emlid, dsh_manual, dsh_laser, dsh_buoy, dsh_poles], axis=1)
+    diffs_sh.columns = ['dsh_emlid', 'dsh_manual', 'dsh_laser', 'dsh_buoy1', 'dsh_buoy2', 'dsh_buoy3', 'dsh_buoy4', 'dsh_pole1',
+                        'dsh_pole2', 'dsh_pole3', 'dsh_pole4', 'dsh_pole5', 'dsh_pole6', 'dsh_pole7', 'dsh_pole8', 'dsh_pole9',
+                        'dsh_pole10', 'dsh_pole11', 'dsh_pole12', 'dsh_pole13', 'dsh_pole14', 'dsh_pole15', 'dsh_pole16']
+
+    diffs_swe = pd.concat([dswe_emlid, dswe_manual, dswe_laser, dswe_buoy, dswe_poles], axis=1)
+    diffs_swe.columns = ['dswe_emlid', 'dswe_manual', 'dswe_laser', 'dswe_buoy1', 'dswe_buoy2', 'dswe_buoy3', 'dswe_buoy4', 'dswe_pole1',
+                        'dswe_pole2', 'dswe_pole3', 'dswe_pole4', 'dswe_pole5', 'dswe_pole6', 'dswe_pole7', 'dswe_pole8', 'dswe_pole9',
+                        'dswe_pole10', 'dswe_pole11', 'dswe_pole12', 'dswe_pole13', 'dswe_pole14', 'dswe_pole15', 'dswe_pole16']
+
+    return diffs_sh, diffs_swe
 

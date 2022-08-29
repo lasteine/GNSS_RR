@@ -104,64 +104,27 @@ df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_l
     resample=False, resample_resolution='30min', ending=ending)
 
 
-''' 4. Read reference sensors .csv data '''
-manual, ipol, buoy, poles, df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std, swe_laser_constant, swe_laser_constant_resampled, swe_laser, swe_laser_resampled = preprocess.read_reference_data(
-    dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, resample_resolution='30min',
-    laser_pickle='shm/nm_shm.pkl')
+''' 4. Read reference sensors data '''
+# todo: something wrong when reading manual file
+manual, ipol, buoy, poles, laser, laser_filtered = preprocess.read_reference_data(
+    dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='shm/nm_laser.pkl')
 
 
-# TODO: write functions
-''' calculate differences between reference and gnss swe data '''
-# Q: difference gnss sh to shm sh (ab dem 23.dez);
-# pegelfeld spuso: 59cm schneezutrag zw. 26.11 und 26.12
-# shm: ca. 50cm schneezutrag
-sh_gnss = swe_gnss_leica * 1000 / 408  # convert gnss swe to snow accumulation with mean density (at 0.5m)
-sh_diff = (sh.resample('D').median() - sh_gnss.resample('D').median()).median().round(0)  # 278mm
+''' 5. Convert swe to snow accumulation and add to df '''
+gnss_leica = preprocess.convert_swe2sh_gnss(swe_gnss_leica, ipol_density=ipol)
+gnss_emlid = preprocess.convert_swe2sh_gnss(swe_gnss_emlid, ipol_density=ipol)
 
-# calculate sh from GNSS SWE with a mean constant density value for h=0.5m (Hecht, 2022)
-sh_leica_const = swe_gnss_leica * 1000 / 408
-sh_emlid_const = swe_gnss_emlid * 1000 / 408
+# resample all sensors sh and swe data to daily data
+leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily = preprocess.resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser_filtered)
 
-# calculate sh from GNSS SWE with interpolated density values (Spuso)
-sh_leica = swe_gnss_leica * 1000 / ipol
-sh_emlid = swe_gnss_emlid * 1000 / ipol
 
-# resample sh and swe data (daily)
-sh_leica_daily = sh_leica.resample('D').median()
-swe_leica_daily = swe_gnss_leica.resample('D').median()
-sh_emlid_daily = sh_emlid.resample('D').median()
-swe_emlid_daily = swe_gnss_emlid.resample('D').median()
-sh_manual_daily = manual.Acc.astype('float64') * 10
-swe_manual_daily = manual.SWE_aboveAnt.astype('float64')
-sh_laser_daily = sh.resample('D').median()
-swe_laser_daily = sh_laser_daily / 1000 * ipol
-for i in range(4):
-    globals()[f"sh_buoy{i + 1}_daily"] = globals()[f"sh_buoy{i + 1}"].resample('D').median()
-    globals()[f"swe_buoy{i + 1}_daily"] = globals()[f"sh_buoy{i + 1}_daily"] / 1000 * ipol
-for i in range(15):
-    globals()[f"sh_poles{i + 1}_daily"] = poles[str(i + 1)].resample('D').median()
-    globals()[f"swe_poles{i + 1}_daily"] = globals()[f"sh_poles{i + 1}_daily"] / 100 * ipol
 
 """ 5. Calculate differences, linear regressions, RMSE & MRB between GNSS and reference data """
-# Q: calculate differences between GNSS (Leica) and reference data
-dsh_emlid_daily = (sh_emlid_daily - sh_leica_daily).dropna()
-dswe_emlid_daily = (swe_emlid_daily - swe_leica_daily).dropna()
-dsh_manual_daily = (sh_manual_daily - sh_leica_daily).dropna()
-dswe_manual_daily = (dsh_manual_daily / 1000 * ipol).dropna()
-dsh_laser_daily = (sh_laser_daily - sh_leica_daily).dropna()
-dswe_laser_daily = (dsh_laser_daily / 1000 * ipol).dropna()
-for i in range(4):
-    globals()[f"dsh_buoy{i + 1}_daily"] = (globals()[f"sh_buoy{i + 1}_daily"] - sh_leica_daily).dropna()
-    globals()[f"dswe_buoy{i + 1}_daily"] = (globals()[f"swe_buoy{i + 1}_daily"] - swe_leica_daily).dropna()
-for i in range(15):
-    globals()[f"dsh_poles{i + 1}_daily"] = (globals()[f"sh_poles{i + 1}_daily"] - sh_leica_daily).dropna()
-    globals()[f"dswe_poles{i + 1}_daily"] = (globals()[f"swe_poles{i + 1}_daily"] - sh_leica_daily).dropna()
+# todo: test function
+# Q: calculate differences between reference data and GNSS (Leica)
+diffs_sh, diffs_swe = preprocess.calculate_differences2gnss(emlid_daily, leica_daily, manual, laser_daily, buoy_daily, poles_daily)
 
-# concatenate all difference dataframes
-diffs = pd.concat(
-    [dsh_emlid_daily, dswe_emlid_daily, dsh_manual_daily, dswe_manual_daily, dsh_laser_daily, dswe_laser_daily], axis=1)
-diffs.columns = ['dsh_emlid', 'dswe_emlid', 'dsh_manual', 'dswe_manual', 'dsh_laser', 'dswe_laser']
-
+# TODO: write functions
 # Q: cross correlation and linear fit (daily & 30min)
 # merge ref and gnss data (daily)
 all_daily = pd.concat(
