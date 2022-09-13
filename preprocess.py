@@ -121,7 +121,7 @@ def copy_file_no_overwrite(source_path, dest_path, file_name):
     pass
 
 
-def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], copy=[True, False], move=[True, False], delete_temp=[True, False]):
+def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], copy=[True, False], parent=[True, False], hatanaka=[True, False], move=[True, False], delete_temp=[True, False]):
     """ copy rinex files of remote directory to a local temp directory if it does not already exist
         & uncompress files, keep observation (and navigation) files
         & delete compressed files and subfolders afterwards
@@ -218,23 +218,29 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
             pass
 
         # Q: move obs (and nav) files to parent dir
-        time.sleep(60)
-        if receiver == 'NMLB':
-            # copy observation (.yyd) & navigation (.yy[ngl]) files from base receiver
-            for f in glob.glob(dest_path + 'var/www/upload/' + receiver + '/*.*'):
-                shutil.move(f, dest_path)
-            print("obs & nav files moved to parent dir %s" % dest_path)
-        if receiver == 'NMLR':
-            # copy only observation (.yyd) files from rover receivers
-            for f in glob.glob(dest_path + 'var/www/upload/' + receiver + '/*.*d'):
-                shutil.move(f, dest_path)
-            print("obs files moved to parent dir %s" % dest_path)
+        if parent is True:
+            time.sleep(60)
+            if receiver == 'NMLB':
+                # copy observation (.yyd) & navigation (.yy[ngl]) files from base receiver
+                for f in glob.glob(dest_path + 'var/www/upload/' + receiver + '/*.*'):
+                    shutil.move(f, dest_path)
+                print("obs & nav files moved to parent dir %s" % dest_path)
+            if receiver == 'NMLR':
+                # copy only observation (.yyd) files from rover receivers
+                for f in glob.glob(dest_path + 'var/www/upload/' + receiver + '/*.*d'):
+                    shutil.move(f, dest_path)
+                print("obs files moved to parent dir %s" % dest_path)
+        else:
+            pass
 
         # Q: convert hatanaka compressed rinex (.yyd) to uncompressed rinex observation (.yyo) files
-        time.sleep(10)
-        for hatanaka_file in glob.glob(dest_path + '*.*d'):
-            print('decompress hatanaka file: ', hatanaka_file)
-            subprocess.Popen('crx2rnx ' + hatanaka_file)
+        if hatanaka is True:
+            time.sleep(10)
+            for hatanaka_file in glob.glob(dest_path + '*.*d'):
+                print('decompress hatanaka file: ', hatanaka_file)
+                subprocess.Popen('crx2rnx ' + hatanaka_file)
+        else:
+            pass
 
         # Q: move all obs (and nav) files from temp to parent directory
         time.sleep(60)
@@ -772,7 +778,7 @@ def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_laser.pkl'):
 
     # append new columns to existing poles dataframe
     laser_filtered = pd.concat([dsh_laser, dsh_laser_std, laser_swe, laser_swe_constant], axis=1)
-    laser_filtered.columns = [['dsh', 'dsh_std', 'dswe', 'dswe_const']]
+    laser_filtered.columns = ['dsh', 'dsh_std', 'dswe', 'dswe_const']
 
     return laser, laser_filtered
 
@@ -788,11 +794,11 @@ def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, F
     :return: manual, ipol, buoy, poles, laser, laser_filtered
     """
     print(colored('\n\nread reference observations', 'blue'))
-    # tODO: check manual and laser for read=False
 
     # Q: read manual accumulation (cm), density (kg/m^3), SWE (mm w.e.) data
     if read_manual is True:
         manual, ipol = read_manual_observations(dest_path)
+        manual.index = pd.DatetimeIndex(manual.index.date)
     else:
         manual, ipol = None, None
 
@@ -866,7 +872,7 @@ def convert_swe2sh_gnss(swe_gnss, ipol_density=None):
 
     # append new columns to existing gnss estimations dataframe
     gnss = pd.concat([swe_gnss, sh_gnss, sh_gnss_const], axis=1)
-    gnss.columns = [['dswe', 'dsh', 'dsh_const']]
+    gnss.columns = ['dswe', 'dsh', 'dsh_const']
 
     return gnss
 

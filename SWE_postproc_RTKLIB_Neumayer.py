@@ -27,7 +27,7 @@ import preprocess
 
 # CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
 scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'  # data source path at AWI server (data copied from Antarctica via O2A)
-dst_path = 'C:/Users/sladina.BGEO02P102/Documents/Paper_SWE_RTK/Run_RTKLib/data_neumayer/'
+dst_path = 'C:/Users/sladina.BGEO02P102/Documents/SD_Card/Postdoc/AWI/05_Analysis/Run_RTKLib/data_neumayer/'
 rover = 'ReachM2_sladina-raw_'  # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
 rover_name = 'NMER_original'  # 'NMER' or 'NMER_original' or 'NMLR'
 receiver = 'NMER'  # 'NMER' or 'NMLB' or 'NMLR'
@@ -46,11 +46,11 @@ end_doy = 5
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
 preprocess.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
-                            move=True, delete_temp=True)  # for emlid rover: NMER
+                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
 preprocess.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
-                            move=True, delete_temp=True)  # for leica rover: NMLR
+                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
 preprocess.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
-                            move=True, delete_temp=True)  # for leica base: NMLB
+                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
 
 """ 1. run RTKLib automatically (instead of RTKPost Gui manually) """
 # process data using RTKLIB post processing command line tool 'rnx2rtkp' for a specific year and a range of day of years (doys)
@@ -105,7 +105,6 @@ df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_l
 
 
 ''' 4. Read reference sensors data '''
-# todo: something wrong when reading manual file
 manual, ipol, buoy, poles, laser, laser_filtered = preprocess.read_reference_data(
     dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='shm/nm_laser.pkl')
 
@@ -118,9 +117,7 @@ gnss_emlid = preprocess.convert_swe2sh_gnss(swe_gnss_emlid, ipol_density=ipol)
 leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily = preprocess.resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser_filtered)
 
 
-
-""" 5. Calculate differences, linear regressions, RMSE & MRB between GNSS and reference data """
-# todo: test function
+""" 6. Calculate differences, linear regressions, RMSE & MRB between GNSS and reference data """
 # Q: calculate differences between reference data and GNSS (Leica)
 diffs_sh, diffs_swe = preprocess.calculate_differences2gnss(emlid_daily, leica_daily, manual, laser_daily, buoy_daily, poles_daily)
 
