@@ -104,234 +104,41 @@ predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = preproc
 preprocess.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
 
-# TODO: write functions
 ''' 6. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + 'plots/', exist_ok=True)
 
-# Q: plot SWE
-# plot SWE Leica, Emlid, laser, buoy, poles
+# plot SWE (Leica, Emlid, manual, laser, buoy, poles)
 preprocess.plot_all_SWE(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
                         save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
-# Q. plot SWE differences (compared to Leica)
+# plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
 preprocess.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
                             save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
+# plot boxplot of differences (Emlid, manual, laser compared to Leica)
+preprocess.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=False)
 
-# Q: plot scatter plot (GNSS vs. manual, daily)
-plt.close()
-plt.figure()
-ax = all_daily.plot.scatter(x='manual', y='U', figsize=(5, 4.5))
-plt.plot(range(10, 750), predict_daily(range(10, 750)), c='k', linestyle='--', alpha=0.7)  # linear regression
-ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=12)
-ax.set_ylim(0, 1000)
-ax.set_xlim(0, 1000)
-ax.set_xlabel('Manual SWE (mm w.e.)', fontsize=12)
-plt.legend(['r(Leica)=%.2f \nr(Emlid)=%.2f' % corr_leica_daily % corr_emlid_daily], fontsize=12, loc='upper left')
-plt.xticks(fontsize=12)
-plt.yticks(fontsize=12)
-plt.grid()
-plt.show()
-# plt.savefig(data_path + '/plots/scatter_SWE_WFJ_manual.png', bbox_inches='tight')
-# plt.savefig(data_path + '/plots/scatter_SWE_WFJ_manual.pdf', bbox_inches='tight')
+# plot scatter plot (GNSS vs. manual/laser, daily/15min)
+preprocess.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt,
+                        x_label='Manual', save=[False, True])
 
+preprocess.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe,
+                        x_label='Laser', save=[False, True])
 
-# Q: plot scatter plot (GNSS vs. laser, 15min)
-plt.close()
-plt.figure()
-ax = all_15min.plot.scatter(x='laser', y='U', figsize=(5, 4.5))
-plt.plot(range(10, 850), predict_15min(range(10, 850)), c='k', linestyle='--', alpha=0.7)  # linear regression
-ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=12)
-ax.set_ylim(0, 1000)
-ax.set_xlim(0, 1000)
-ax.set_xlabel('Snow scale SWE (mm w.e.)', fontsize=12)
-plt.legend(['r=%.2f' % corr_leica_15min], fontsize=12, loc='upper left')
-plt.xticks(fontsize=12)
-plt.yticks(fontsize=12)
-plt.grid()
-plt.show()
-# plt.savefig(data_path + '/plots/scatter_SWE_WFJ_scale_30min.png', bbox_inches='tight')
-# plt.savefig(data_path + '/plots/scatter_SWE_WFJ_scale_30min.pdf', bbox_inches='tight')
-
-# Q: plot boxplot of differences
-dswe_manual_daily.describe()
-dswe_laser_daily.describe()
-dswe_emlid_daily.describe()
-diffs[['Manual', 'Laser', 'Low-cost GNSS']].plot.box(ylim=(-100, 200), figsize=(3, 4.5), fontsize=12)
-plt.grid()
-plt.ylabel('ΔSWE (mm w.e.)', fontsize=12)
-plt.show()
-# plt.savefig('plots/box_SWE_WFJ_diff.png', bbox_inches='tight')
-# plt.savefig('plots/box_SWE_WFJ_diff.pdf', bbox_inches='tight')
 
 # Q: plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
-plt.close()
-plt.figure()
-sh_leica.dropna().plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
-sh_emlid.dropna().plot(color='salmon', linestyle='--')
-(manual.Acc.astype('float64') * 10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5,
-                                         markeredgewidth=1).grid()
-plt.errorbar((manual.Acc.astype('float64') * 10).index, (manual.Acc.astype('float64') * 10),
-             yerr=(manual.Acc.astype('float64') * 10) / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
-sh.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-for i in range(15):
-    poles[str(i + 1)].dropna().plot(linestyle=':', alpha=0.6, legend=False).grid()
-for i in range(4):
-    globals()[f"sh_buoy{i + 1}_daily"].plot(color='lightgrey', linestyle='-', legend=False).grid()
-sh.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-# plt.fill_between(sh_std.index, sh - sh_std, sh + sh_std, color="darkblue", alpha=0.2)
-# plt.fill_between(sh_leica.index, sh_leica - sh_leica/10, sh_leica + sh_leica/10, color="crimson", alpha=0.2)
-# plt.fill_between(sh_emlid.index, sh_emlid - sh_emlid/10, sh_emlid + sh_emlid/10, color="salmon", alpha=0.2)
-plt.xlabel(None)
-plt.ylabel('Snow accumulation (mm)', fontsize=14)
-plt.legend(['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-plt.show()
-# plt.savefig('data_neumayer/plots/Acc_all_2021_22.png', bbox_inches='tight')
-# plt.savefig('data_neumayer/plots/Acc_all_2021_22.pdf', bbox_inches='tight')
+preprocess.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
+                        save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 
 # plot Difference in Accumulation (compared to Leica)
-plt.figure()
-(sh_emlid.resample('D').median() - sh_leica.resample('D').median()).dropna().plot(color='salmon', linestyle='--',
-                                                                                  fontsize=12, figsize=(6, 5.5),
-                                                                                  ylim=(-200, 1000)).grid()
-((manual.Acc.astype('float64') * 10).resample('D').median() - sh_leica.resample('D').median()).dropna().plot(
-    color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-(sh.resample('D').median() - sh_leica.resample('D').median()).dropna().plot(color='darkblue', linestyle='-.',
-                                                                            label='Accumulation (cm)').grid()
-for i in range(4):
-    (globals()[f"dsh_buoy{i + 1}_daily"][(
-            globals()[f"dsh_buoy{i + 1}_daily"] < globals()[f"dsh_buoy{i + 1}_daily"].median() +
-            2 * globals()[f"dsh_buoy{i + 1}_daily"].std())]).plot(color='lightgrey', linestyle='-').grid()
-for i in range(15):
-    (poles[str(i + 1)].resample('D').median() - sh_leica.resample('D').median()).dropna().plot(linestyle=':', alpha=0.6,
-                                                                                               legend=False).grid()
-plt.xlabel(None)
-plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
-plt.legend(['Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='best')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-# plt.show()
-plt.savefig('data_neumayer/plots/Delta_Acc_all_2021_22.png', bbox_inches='tight')
-plt.savefig('data_neumayer/plots/Delta_Acc_all_2021_22.pdf', bbox_inches='tight')
+preprocess.plot_all_diffAcc(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
+                            save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
-# plot snow accumulation from all four sensors of the snow buoy
-plt.close()
-globals()[f"dsh_buoy1_daily"].plot(linestyle='-')
-globals()[f"dsh_buoy2_daily"].plot(linestyle='--')
-globals()[f"dsh_buoy3_daily"].plot(linestyle='-.')
-globals()[f"dsh_buoy4_daily"].plot(linestyle=':', xlim=('2021-11-26', '2022-05-01'), ylim=(-10, 60), fontsize=14,
-                                   grid=True)
-plt.legend(['buoy1', 'buoy2', 'buoy3', 'buoy4'], loc='lower right', fontsize=12)
-plt.ylabel('Snow accumulation (cm)', fontsize=14)
-plt.show()
-
-# calculate difference in pole accumulation to Leica
-for i in range(15):
-    p = (poles[str(i + 1)].resample('D').median() - sh_leica.resample('D').median()).dropna()
-    p_day = p[(p.index == '2021-12-25')]
-    print(int(p_day))
-
+# TODO: write functions
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
-plt.figure()
-swe_gnss_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
-swe_gnss_emlid.plot(color='salmon', linestyle='--')
-plt.errorbar((manual.SWE_aboveAnt.astype('float64')).index, (manual.SWE_aboveAnt.astype('float64')),
-             yerr=(manual.SWE_aboveAnt.astype('float64')) / 10, color='k', linestyle='', capsize=4, alpha=0.5)
-sh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-(manual.Acc.astype('float64') * 10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5,
-                                         markeredgewidth=1).grid()
-plt.errorbar((manual.Acc.astype('float64') * 10).index, (manual.Acc.astype('float64') * 10),
-             yerr=(manual.Acc.astype('float64') * 10) / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
-(sh / 1000 * ipol).dropna().plot(color='k', linestyle='--').grid()
-(manual.SWE_aboveAnt.astype('float64')).plot(color='k', linestyle=' ', marker='+', markersize=8,
-                                             markeredgewidth=2).grid()
-(manual.Density_aboveAnt.dropna()).plot(color='steelblue', linestyle=' ', marker='*', markersize=8, markeredgewidth=2,
-                                        label='Density (kg/m3)').grid()
-plt.errorbar(manual.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k', linestyle='', capsize=4,
-             alpha=0.5)
-# plt.fill_between(sh_std.index, sh - sh_std, sh + sh_std, color="darkblue", alpha=0.2)
-# plt.fill_between(s_15min.index, (m_15min-m_15min[0]) - s_15min, (m_15min-m_15min[0]) + s_15min, color="crimson", alpha=0.2)
-plt.xlabel(None)
-plt.ylabel('SWE (mm w.e.)', fontsize=14)
-plt.legend(
-    ['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)', 'Manual',
-     'Density (kg/m3)'], fontsize=11, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-# plt.show()
-plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
-plt.savefig('data_neumayer/plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', bbox_inches='tight')
+preprocess.plot_SWE_density_acc()
 
-# plot Difference in SWE (compared to Leica), fitting above plot
-plt.figure()
-((sh_emlid.resample('D').median() - sh_leica.resample('D').median()) / 1000 * ipol).dropna().plot(color='salmon',
-                                                                                                  linestyle='--',
-                                                                                                  fontsize=12,
-                                                                                                  figsize=(6, 5.5),
-                                                                                                  ylim=(
-                                                                                                      -100, 500)).grid()
-(((manual.Acc.astype('float64') * 10).resample('D').median() - sh_leica.resample(
-    'D').median()) / 1000 * ipol).dropna().plot(color='k', linestyle=' ', marker='+', markersize=8,
-                                                markeredgewidth=2).grid()
-((sh.resample('D').median() - sh_leica.resample('D').median()) / 1000 * ipol).dropna().plot(color='k', linestyle='--',
-                                                                                            label='Accumulation (cm)').grid()
-plt.xlabel(None)
-plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
-plt.legend(['Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-# plt.show()
-plt.savefig('data_neumayer/plots/Delta_SWE_Emlid_Manual_Laser_2021_22.png', bbox_inches='tight')
-plt.savefig('data_neumayer/plots/Delta_SWE_Emlid_Manual_Laser_2021_22.pdf', bbox_inches='tight')
 
-# plot Difference in Accumulation (compared to Leica), fitting above plot
-plt.figure()
-(sh_emlid.resample('D').median() - sh_leica.resample('D').median()).dropna().plot(color='salmon', linestyle='--', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
-((manual.Acc.astype('float64') * 10).resample('D').median() - sh_leica.resample('D').median()).dropna().plot(
-    color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-(sh.resample('D').median() - sh_leica.resample('D').median()).dropna().plot(color='darkblue', linestyle='-.',
-                                                                            label='Accumulation (cm)').grid()
-plt.xlabel(None)
-plt.ylabel('ΔAccumulation (mm)', fontsize=14)
-plt.legend(['Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-# plt.show()
-plt.savefig('data_neumayer/plots/Delta_Acc_Emlid_Manual_Laser_2021_22.png', bbox_inches='tight')
-plt.savefig('data_neumayer/plots/Delta_Acc_Emlid_Manual_Laser_2021_22.pdf', bbox_inches='tight')
-
-# Q: plot PPP position solutions
-# read ppp data
-# create empty dataframe for all .log files
-df_ppp = pd.DataFrame()
-# read all .ENU files in folder, parse date and time columns to datetimeindex and add them to the dataframe
-for file in glob.iglob('data_neumayer/ppp/*.pos', recursive=True):
-    print(file)
-    # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
-    ppp = pd.read_csv(file, header=7, delimiter=' ', skipinitialspace=True, na_values=["NaN"],
-                      usecols=[4, 5, 10, 11, 12, 22, 24, 25], parse_dates=[['date', 'time']],
-                      names=['date', 'time', 'dlat', 'dlon', 'dh', 'h', 'utm_e', 'utm_n'],
-                      index_col=['date_time'], encoding='latin1', engine='python')
-    df_ppp = pd.concat([df_ppp, ppp], axis=0)
-
-# plot lat, lon, h timeseries
-fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True)
-(df_ppp * 100).dlat.plot(ax=axes[0], ylim=(-250, 250)).grid()
-(df_ppp * 100).dlon.plot(ax=axes[1], ylim=(-250, 250)).grid()
-(df_ppp * 100).dh.plot(ax=axes[2], ylim=(-100, 500)).grid()
-axes[0].set_ylabel('ΔLat (cm)', fontsize=14)
-axes[1].set_ylabel('ΔLon (cm)', fontsize=14)
-axes[2].set_ylabel('ΔH (cm)', fontsize=14)
-plt.xlabel(None)
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.show()
-plt.savefig('plots/LLH_base.png', bbox_inches='tight')
-plt.savefig('plots/LLH_base.pdf', bbox_inches='tight')
+# plot PPP position solutions
+df_ppp = preprocess.plot_PPP_solution(dst_path, save=False)

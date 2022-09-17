@@ -1074,6 +1074,43 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
 
 """ Define plot functions """
 
+# TODO: write function here
+def plot_SWE_density_acc(dest_path, ):
+    plt.figure()
+    swe_gnss_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
+    swe_gnss_emlid.plot(color='salmon', linestyle='--')
+    plt.errorbar((manual.SWE_aboveAnt.astype('float64')).index, (manual.SWE_aboveAnt.astype('float64')),
+                 yerr=(manual.SWE_aboveAnt.astype('float64')) / 10, color='k', linestyle='', capsize=4, alpha=0.5)
+    sh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+    (manual.Acc.astype('float64') * 10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5,
+                                             markeredgewidth=1).grid()
+    plt.errorbar((manual.Acc.astype('float64') * 10).index, (manual.Acc.astype('float64') * 10),
+                 yerr=(manual.Acc.astype('float64') * 10) / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
+    (sh / 1000 * ipol).dropna().plot(color='k', linestyle='--').grid()
+    (manual.SWE_aboveAnt.astype('float64')).plot(color='k', linestyle=' ', marker='+', markersize=8,
+                                                 markeredgewidth=2).grid()
+    (manual.Density_aboveAnt.dropna()).plot(color='steelblue', linestyle=' ', marker='*', markersize=8,
+                                            markeredgewidth=2,
+                                            label='Density (kg/m3)').grid()
+    plt.errorbar(manual.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k', linestyle='', capsize=4,
+                 alpha=0.5)
+    # plt.fill_between(sh_std.index, sh - sh_std, sh + sh_std, color="darkblue", alpha=0.2)
+    # plt.fill_between(s_15min.index, (m_15min-m_15min[0]) - s_15min, (m_15min-m_15min[0]) + s_15min, color="crimson", alpha=0.2)
+    plt.xlabel(None)
+    plt.ylabel('SWE (mm w.e.)', fontsize=14)
+    plt.legend(
+        ['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)',
+         'Manual',
+         'Density (kg/m3)'], fontsize=11, loc='upper left')
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    if save is True:
+        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
+        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
 
 def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
@@ -1085,10 +1122,10 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     if emlid is not None:
         emlid.dswe.plot(color='salmon', linestyle='--')
     if manual is not None:
-        manual.SWE_aboveAnt.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-        plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
+        manual.SWE_aboveAnt.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
+        plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k', linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
-        laser.dswe.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+        laser.dswe.dropna().plot(color='k', linestyle='--', label='Accumulation (cm)').grid()
     if buoy is not None:
         plt.plot(buoy[['dswe1', 'dswe2', 'dswe3', 'dswe4']], color='lightgrey', linestyle='-')
     if poles is not None:
@@ -1118,10 +1155,10 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
     plt.figure()
     diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
     if manual is not None:
-        diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-        plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
+        diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
+        plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='k', linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
-        diffs_swe.dswe_laser.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+        diffs_swe.dswe_laser.plot(color='k', linestyle='--', label='Accumulation (cm)').grid()
     if buoy is not None:
         plt.plot(diffs_swe[['dswe_buoy1', 'dswe_buoy2', 'dswe_buoy3', 'dswe_buoy4']], color='lightgrey', linestyle='-')
     if poles is not None:
@@ -1139,3 +1176,147 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
         plt.savefig(data_path + '/plots/deltaSWE_all_2021_22' + suffix + '.pdf', bbox_inches='tight')
     else:
         plt.show()
+
+
+def plot_scatter(data_path, y_leica, y_emlid, x_value, x_label='Manual', save=[False, True]):
+    plt.close()
+    plt.figure(figsize=(5, 4.5))
+    leica_x = pd.concat([y_leica, x_value], axis=1)
+    leica_x.columns = ['dswe_y', 'dswe_x']
+    emlid_x = pd.concat([y_emlid, x_value], axis=1)
+    emlid_x.columns = ['dswe_y', 'dswe_x']
+    ax = leica_x.plot.scatter(x='dswe_x', y='dswe_y', color='k')
+    emlid_x.plot.scatter(x='dswe_x', y='dswe_y', color='salmon', ax=ax)
+    # plt.plot(range(10, 750), predict_daily(range(10, 750)), c='crimson', linestyle='--', alpha=0.7)  # linear regression leica
+    # plt.plot(range(10, 750), predict_emlid_daily(range(10, 750)), c='salmon', linestyle='-.', alpha=0.7)  # linear regression emlid
+    ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=12)
+    ax.set_ylim(-50, 200)
+    ax.set_xlim(-50, 200)
+    ax.set_xlabel(x_label + ' SWE (mm w.e.)', fontsize=12)
+    plt.legend(['High-end', 'Low-cost'], fontsize=12, loc='upper left')
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.grid()
+    if save is True:
+        plt.savefig(data_path + '/plots/scatter_SWE_' + x_label + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/plots/scatter_SWE_' + x_label + '.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_swediff_boxplot(dest_path, diffs, save=[False, True]):
+    """ Plot boxplot of differences of SWE from manual/laser/emlid data to Leica data
+    """
+    diffs.dswe_manual.describe()
+    diffs.dswe_laser.describe()
+    diffs.dswe_emlid.describe()
+    diffs[['dswe_manual', 'dswe_laser', 'dswe_emlid']].plot.box(ylim=(-100, 200), figsize=(3, 4.5), fontsize=12, rot=15)
+    plt.grid()
+    plt.ylabel('ΔSWE (mm w.e.)', fontsize=12)
+    if save is True:
+        plt.savefig(dest_path + 'plots/box_diffSWE.png', bbox_inches='tight')
+        plt.savefig(dest_path + 'plots/box_diffSWE.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+    """ Plot Accumulation (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
+    """
+    plt.close()
+    plt.figure()
+    if leica is not None:
+        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
+    if emlid is not None:
+        emlid.dsh.plot(color='salmon', linestyle='--')
+    if manual is not None:
+        manual.Acc.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+        plt.errorbar(manual.Acc.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
+    if laser is not None:
+        laser.dsh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+    if buoy is not None:
+        plt.plot(buoy[['dsh1', 'dsh2', 'dsh3', 'dsh4']], color='lightgrey', linestyle='-')
+    if poles is not None:
+        plt.plot(poles[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']], linestyle=':', alpha=0.6)
+    if leica is not None:
+        plt.fill_between(leica.index, leica.dsh - leica.dsh / 10, leica.dsh + leica.dsh / 10, color="crimson", alpha=0.2)
+    if emlid is not None:
+        plt.fill_between(emlid.index, emlid.dsh - emlid.dsh / 10, emlid.dsh + emlid.dsh / 10, color="salmon", alpha=0.2)
+
+    plt.xlabel(None)
+    plt.ylabel('Snow accumulation (mm)', fontsize=14)
+    plt.legend(leg, fontsize=12, loc='lower right')
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    if save is True:
+        plt.savefig(data_path + '/plots/Acc_all_2021_22' + suffix + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/plots/Acc_all_2021_22' + suffix + '.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_all_diffAcc(data_path, diffs_sh, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+    """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
+    """
+    plt.close()
+    plt.figure()
+    diffs_sh.dsh_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
+    if manual is not None:
+        diffs_sh.dsh_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+        plt.errorbar(diffs_sh.dsh_manual.index, diffs_sh.dsh_manual, yerr=diffs_sh.dsh_manual / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
+    if laser is not None:
+        diffs_sh.dsh_laser.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+    if buoy is not None:
+        plt.plot(diffs_sh[['dsh_buoy1', 'dsh_buoy2', 'dsh_buoy3', 'dsh_buoy4']], color='lightgrey', linestyle='-')
+    if poles is not None:
+        plt.plot(diffs_sh[['dsh_pole1', 'dsh_pole2', 'dsh_pole3', 'dsh_pole4', 'dsh_pole5', 'dsh_pole6', 'dsh_pole7', 'dsh_pole8', 'dsh_pole9', 'dsh_pole10', 'dsh_pole11', 'dsh_pole12', 'dsh_pole13', 'dsh_pole14', 'dsh_pole15', 'dsh_pole16']], linestyle=':', alpha=0.6)
+    plt.fill_between(diffs_sh.dsh_emlid.index, diffs_sh.dsh_emlid - diffs_sh.dsh_emlid / 10, diffs_sh.dsh_emlid + diffs_sh.dsh_emlid / 10, color="salmon", alpha=0.2)
+
+    plt.xlabel(None)
+    plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
+    plt.legend(leg, fontsize=12, loc='lower right')
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    if save is True:
+        plt.savefig(data_path + '/plots/deltaAcc_all_2021_22' + suffix + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/plots/deltaAcc_all_2021_22' + suffix + '.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_PPP_solution(dest_path, save=[False, True]):
+    """ Read PPP solution and plot it
+    """
+    # create empty dataframe for all .log files
+    df_ppp = pd.DataFrame()
+    # read all PPP solution files in folder, parse date and time columns to datetimeindex and add them to the dataframe
+    for file in glob.iglob(dest_path + 'ppp/*.pos', recursive=True):
+        print(file)
+        # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
+        ppp = pd.read_csv(file, header=7, delimiter=' ', skipinitialspace=True, na_values=["NaN"],
+                          usecols=[4, 5, 10, 11, 12, 22, 24, 25], parse_dates=[['date', 'time']],
+                          names=['date', 'time', 'dlat', 'dlon', 'dh', 'h', 'utm_e', 'utm_n'],
+                          index_col=['date_time'], encoding='latin1', engine='python')
+        df_ppp = pd.concat([df_ppp, ppp], axis=0)
+
+    # plot lat, lon, h timeseries
+    fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True)
+    (df_ppp * 100).dlat.plot(ax=axes[0], ylim=(-250, 250)).grid()
+    (df_ppp * 100).dlon.plot(ax=axes[1], ylim=(-250, 250)).grid()
+    (df_ppp * 100).dh.plot(ax=axes[2], ylim=(-100, 500)).grid()
+    axes[0].set_ylabel('ΔLat (cm)', fontsize=14)
+    axes[1].set_ylabel('ΔLon (cm)', fontsize=14)
+    axes[2].set_ylabel('ΔH (cm)', fontsize=14)
+    plt.xlabel(None)
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    if save is True:
+        plt.savefig('plots/LLH_base.png', bbox_inches='tight')
+        plt.savefig('plots/LLH_base.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
+    return df_ppp
+
+
