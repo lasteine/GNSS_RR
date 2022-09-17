@@ -64,34 +64,6 @@ preprocess.automate_rtklib_pp(dst_path, '3393', yy, ti_int, base, nav, sp3, reso
 df_enu_emlid = preprocess.get_rtklib_solutions(dst_path, 'NMER', resolution, ending, header_length=26)
 df_enu_leica = preprocess.get_rtklib_solutions(dst_path, 'NMLR', resolution, ending, header_length=27)
 
-# ''' 3. Filter and clean ENU solution data more automized variable creation '''
-#
-# hier wäre gut: globals()[f"df_enu{ending}"] = df_enu
-# TODO: write functions
-# TODO: check where to implement generic variable names
-# # import RTKLib solution files from different solution variants
-# globals()[f"df_enu{ending}"] = df_enu
-# globals()[f"fil_df{ending}"] = pd.DataFrame(df_enu[(df_enu.amb_state == 1)])
-# fil_df = globals()[f"fil_df{ending}"]
-# globals()[f"fil{ending}"] = (fil_df.U - fil_df.U[1]) * 1000
-# fil = globals()[f"fil{ending}"]
-# # remove outliers
-# upper_limit = fil.median() + 3 * fil.std()
-# lower_limit = fil.median() - 3 * fil.std()
-# globals()[f"fil_clean{ending}"] = fil[(fil > lower_limit) & (fil < upper_limit)]
-#
-# # filter data
-# globals()[f"m{ending}"] = globals()[f"fil_clean{ending}"].rolling('D').median()       # .resample('15min').median()
-# globals()[f"s{ending}"] = globals()[f"fil_clean{ending}"].rolling('D').std()
-#
-# # adjust for snow mast heightening (approx. 3m elevated)
-# m_15min = globals()[f"m{ending}"]
-# jump = m_15min[(m_15min.diff() < -1000)]    # detect jumps (>2m) in the dataset
-# adj = m_15min[(m_15min.index > jump.index.format()[0])] - jump[0]     # correct jump [1]
-# globals()[f"m_adj{ending}"] = m_15min[~(m_15min.index >= jump.index.format()[0])].append(adj)   # adjusted dataset
-#
-# globals()[f"swe{ending}"] = globals()[f"m_adj{ending}"]-globals()[f"m_adj{ending}"][0]
-# globals()[f"swe{ending}"].index = globals()[f"swe{ending}"].index + pd.Timedelta(seconds=18)
 
 ''' 3. Filter and clean ENU solution data '''
 # filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening) and store results in pickle and .csv
@@ -113,121 +85,37 @@ manual, ipol, buoy, poles, laser, laser_filtered = preprocess.read_reference_dat
 gnss_leica = preprocess.convert_swe2sh_gnss(swe_gnss_leica, ipol_density=ipol)
 gnss_emlid = preprocess.convert_swe2sh_gnss(swe_gnss_emlid, ipol_density=ipol)
 
-# resample all sensors sh and swe data to daily data
-leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily = preprocess.resample_all2daily_obs(gnss_leica, gnss_emlid, buoy, poles, laser_filtered)
+# resample all sensors sh and swe data to daily & 15min data
+leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily = preprocess.resample_allobs(gnss_leica, gnss_emlid, buoy, poles, laser_filtered, interval='D')
 
 
 """ 6. Calculate differences, linear regressions, RMSE & MRB between GNSS and reference data """
-# Q: calculate differences between reference data and GNSS (Leica)
-diffs_sh, diffs_swe = preprocess.calculate_differences2gnss(emlid_daily, leica_daily, manual, laser_daily, buoy_daily, poles_daily)
+# calculate differences between reference data and GNSS (Leica/Emlid)
+diffs_sh_daily, diffs_swe_daily = preprocess.calculate_differences2gnss(emlid_daily, leica_daily, manual, laser_daily, buoy_daily, poles_daily)
+diffs_sh_15min, diffs_swe_15min, laser_15min = preprocess.calculate_differences2gnss_15min(gnss_emlid, gnss_leica, laser_filtered)
+
+# calculate SWE cross correation manual/laser vs. GNSS (daily & 15min)
+corr_leica_daily, corr_emlid_daily, corr_leica_15min, corr_emlid_15min = preprocess.calculate_crosscorr(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min)
+
+# fit linear regression curve manual/laser vs. GNSS (daily & 15min)
+predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = preprocess.calculate_linearfit(leica_daily, manual, gnss_leica, gnss_emlid, laser_15min)
+
+# calculate RMSE, MRB, and number of samples
+preprocess.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
+
 
 # TODO: write functions
-# Q: cross correlation and linear fit (daily & 30min)
-# merge ref and gnss data (daily)
-all_daily = pd.concat(
-    [sh_leica_daily, sh_emlid_daily, swe_emlid_daily, sh_manual_daily, swe_manual_daily, sh_laser_daily,
-     swe_laser_daily], axis=1)
-all_daily_nonan = all_daily.dropna()
-# merge scale and gnss data (30min)
-all_15min = pd.concat([sh_leica, sh_emlid, swe_laser_resampled], axis=1)
-all_15min_nonan = all_15min.dropna()
-
-# SWE cross correation manual vs. GNSS (daily)
-corr_leica_daily = all_daily.swe_manual_daily.corr(all_daily.swe_leica_daily)
-corr_emlid_daily = all_daily.swe_manual_daily.corr(all_daily.swe_emlid_daily)
-print('\nPearsons correlation (manual vs. GNSS, daily), Leica: %.2f' % corr_leica_daily)
-print('\nPearsons correlation (manual vs. GNSS, daily), Emlid: %.2f' % corr_emlid_daily)
-# calculate cross correation laser vs. GNSS (15min)
-corr_leica_15min = all_15min.swe_laser_15min.corr(all_15min.swe_leica)
-corr_emlid_15min = all_15min.swe_laser_15min.corr(all_15min.swe_leica)
-print('Pearsons correlation (laser vs. GNSS, 15min), Leica: %.2f' % corr_leica_15min)
-print('Pearsons correlation (laser vs. GNSS, 15min), Emlid: %.2f' % corr_emlid_15min)
-
-# fit linear regression curve manual vs. GNSS (daily)
-fit_daily = np.polyfit(all_daily_nonan.swe_manual_daily, all_daily_nonan.swe_leica, 1)
-predict_daily = np.poly1d(fit_daily)
-print('\nLinear fit (manual vs. GNSS, daily): \nm = ', round(fit_daily[0], 2), '\nb = ', int(fit_daily[1]))
-# fit linear regression curve laser vs. GNSS (15min), Leica
-fit_15min = np.polyfit(all_15min_nonan.swe_laser_15min, all_15min_nonan.swe_leica, 1)
-predict_15min = np.poly1d(fit_15min)
-print('Linear fit (laser vs. GNSS, 15min), Leica: \nm = ', round(fit_15min[0], 2), '\nb = ', int(fit_15min[1]))
-# fit linear regression curve laser vs. GNSS (15min), Emlid
-fit_15min_emlid = np.polyfit(all_15min_nonan.swe_laser_15min, all_15min_nonan.swe_emlid, 1)
-predict_15min_emlid = np.poly1d(fit_15min_emlid)
-print('Linear fit (laser vs. GNSS, 15min), Emlid: \nm = ', round(fit_15min_emlid[0], 2), '\nb = ',
-      int(fit_15min_emlid[1]))  # n=12, m=1.02, b=-8 mm w.e.
-
-# RMSE
-rmse_manual = np.sqrt((np.sum(dswe_manual_daily ** 2)) / len(dswe_manual_daily))
-print('\nRMSE (manual vs. GNSS, daily): %.1f' % rmse_manual)
-rmse_laser = np.sqrt((np.sum(dswe_laser_daily ** 2)) / len(dswe_laser_daily))
-print('RMSE (scale vs. GNSS, 30min): %.1f' % rmse_laser)
-
-# MRB
-mrb_manual = (dswe_manual_daily / swe_manual_daily).mean() * 100
-print('\nMRB (manual vs. GNSS, daily): %.1f' % mrb_manual)
-mrb_laser = (dswe_laser_daily / swe_laser_daily).mean() * 100
-print('MRB (laser vs. GNSS, 30min): %.1f' % mrb_laser)
-
-# Number of samples
-n_manual = len(dswe_laser_daily)
-print('\nNumber of samples (manual vs. GNSS, daily): %.0f' % n_manual)
-n_scale = len(dswe_laser_daily)
-print('Number of samples (scale vs. GNSS, 30min): %.0f' % n_scale)
-
 ''' 6. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + 'plots/', exist_ok=True)
 
 # Q: plot SWE
 # plot SWE Leica, Emlid, laser, buoy, poles
-plt.figure()
-swe_gnss_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
-swe_gnss_emlid.plot(color='salmon', linestyle='--')
-swe_manual_daily.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-plt.errorbar(swe_manual_daily.index, swe_manual_daily, yerr=swe_manual_daily / 10, color='darkblue', linestyle='',
-             capsize=4, alpha=0.5)
-swe_laser_resampled.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-for i in range(4):
-    (globals()[f"swe_buoy{i + 1}_daily"][(
-            globals()[f"swe_buoy{i + 1}_daily"] < globals()[f"swe_buoy{i + 1}_daily"].median() +
-            2 * globals()[f"swe_buoy{i + 1}_daily"].std())]).plot(color='lightgrey', linestyle='-').grid()
-for i in range(15):
-    globals()[f"swe_poles{i + 1}_daily"].plot(linestyle=':', alpha=0.6, legend=False).grid()
-plt.fill_between(swe_gnss_leica.index, swe_gnss_leica - swe_gnss_leica / 10, swe_gnss_leica + swe_gnss_leica / 10,
-                 color="crimson", alpha=0.2)
-plt.fill_between(swe_gnss_emlid.index, swe_gnss_emlid - swe_gnss_emlid / 10, swe_gnss_emlid + swe_gnss_emlid / 10,
-                 color="salmon", alpha=0.2)
-plt.xlabel(None)
-plt.ylabel('SWE (mm w.e.)', fontsize=14)
-plt.legend(['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-plt.show()
-# plt.savefig(data_path + '/plots/SWE_all_poles_2021_22.png', bbox_inches='tight')
-# plt.savefig(data_path + '/plots/SWE_all_poles_2021_22.pdf', bbox_inches='tight')
+preprocess.plot_all_SWE(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
+                        save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
-
-# Q. plot SWE difference (compared to Leica)
-plt.figure()
-dswe_emlid_daily.dropna().plot(color='salmon', linestyle='--', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
-dswe_manual_daily.dropna().plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
-dswe_laser_daily.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-for i in range(4):
-    (globals()[f"dswe_buoy{i + 1}_daily"][(
-            globals()[f"dswe_buoy{i + 1}_daily"] < globals()[f"dswe_buoy{i + 1}_daily"].median() +
-            2 * globals()[f"dswe_buoy{i + 1}_daily"].std())]).plot(color='lightgrey', linestyle='-').grid()
-for i in range(15):
-    globals()[f"dswe_poles{i + 1}_daily"].plot(linestyle=':', alpha=0.6, legend=False).grid()
-plt.xlabel(None)
-plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
-plt.legend(['Low-cost GNSS', 'Manual', 'Laser (SHM)'], fontsize=12, loc='upper left')
-plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-plt.show()
-# plt.savefig(data_path + '/plots/Delta_SWE_all_2021_22.png', bbox_inches='tight')
-# plt.savefig(data_path + '/plots/Delta_SWE_all_2021_22.pdf', bbox_inches='tight')
+# Q. plot SWE differences (compared to Leica)
+preprocess.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
+                            save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 
 # Q: plot scatter plot (GNSS vs. manual, daily)
@@ -248,7 +136,7 @@ plt.show()
 # plt.savefig(data_path + '/plots/scatter_SWE_WFJ_manual.pdf', bbox_inches='tight')
 
 
-# Q: plot scatter plot (GNSS vs. scale, 30min)
+# Q: plot scatter plot (GNSS vs. laser, 15min)
 plt.close()
 plt.figure()
 ax = all_15min.plot.scatter(x='laser', y='U', figsize=(5, 4.5))
