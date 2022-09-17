@@ -211,17 +211,16 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                     # Q: uncompress .tar.xz file
                     with tarfile.open(fileobj=lzma.open(dest_file)) as tar:
                         tar.extractall(dest_path)
-                        tar.close()
                         print('file decompressed: %s' % dest_file)
+                        tar.fileobj.close()
                 else:
-                    print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f , 'yellow'))
+                    print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
                     pass
         else:
             pass
 
         # Q: move obs (and nav) files to parent dir
         if parent is True:
-            time.sleep(300)
             if receiver == 'NMLB':
                 # copy observation (.yyd) & navigation (.yy[ngl]) files from base receiver
                 for f in glob.glob(dest_path + 'var/www/upload/' + receiver + '/*.*'):
@@ -237,15 +236,14 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
 
         # Q: convert hatanaka compressed rinex (.yyd) to uncompressed rinex observation (.yyo) files
         if hatanaka is True:
-            time.sleep(300)
             for hatanaka_file in glob.glob(dest_path + '*.*d'):
                 print('decompress hatanaka file: ', hatanaka_file)
-                subprocess.Popen('crx2rnx ' + hatanaka_file)
+                # subprocess.Popen('crx2rnx ' + hatanaka_file)
+                subprocess.call('crx2rnx ' + hatanaka_file)
         else:
             pass
 
         # Q: move all obs (and nav) files from temp to parent directory
-        time.sleep(300)
         if move is True:
             for f in glob.glob(dest_path + '*.*[ongl]'):
                 move_files2parentdir(dest_path, f)
