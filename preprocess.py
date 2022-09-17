@@ -1075,23 +1075,17 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
 """ Define plot functions """
 
 # TODO: write function here
-def plot_SWE_density_acc(dest_path, ):
+def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, True]):
     plt.figure()
-    swe_gnss_leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
-    swe_gnss_emlid.plot(color='salmon', linestyle='--')
-    plt.errorbar((manual.SWE_aboveAnt.astype('float64')).index, (manual.SWE_aboveAnt.astype('float64')),
-                 yerr=(manual.SWE_aboveAnt.astype('float64')) / 10, color='k', linestyle='', capsize=4, alpha=0.5)
-    sh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-    (manual.Acc.astype('float64') * 10).plot(color='darkblue', linestyle=' ', marker='o', markersize=5,
-                                             markeredgewidth=1).grid()
-    plt.errorbar((manual.Acc.astype('float64') * 10).index, (manual.Acc.astype('float64') * 10),
-                 yerr=(manual.Acc.astype('float64') * 10) / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
-    (sh / 1000 * ipol).dropna().plot(color='k', linestyle='--').grid()
-    (manual.SWE_aboveAnt.astype('float64')).plot(color='k', linestyle=' ', marker='+', markersize=8,
-                                                 markeredgewidth=2).grid()
-    (manual.Density_aboveAnt.dropna()).plot(color='steelblue', linestyle=' ', marker='*', markersize=8,
-                                            markeredgewidth=2,
-                                            label='Density (kg/m3)').grid()
+    leica.dswe.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
+    emlid.dswe.plot(color='salmon', linestyle='--')
+    plt.errorbar(manual.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
+    laser.dsh.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+    manual.Acc.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+    plt.errorbar(manual.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
+    laser.dswe.plot(color='k', linestyle='--').grid()
+    manual.SWE_aboveAnt.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
+    manual.Density_aboveAnt.plot(color='steelblue', linestyle=' ', marker='*', markersize=8, markeredgewidth=2, label='Density (kg/m3)').grid()
     plt.errorbar(manual.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k', linestyle='', capsize=4,
                  alpha=0.5)
     # plt.fill_between(sh_std.index, sh - sh_std, sh + sh_std, color="darkblue", alpha=0.2)
@@ -1100,14 +1094,13 @@ def plot_SWE_density_acc(dest_path, ):
     plt.ylabel('SWE (mm w.e.)', fontsize=14)
     plt.legend(
         ['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)',
-         'Manual',
-         'Density (kg/m3)'], fontsize=11, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 5, 1))
+         'Manual', 'Density (kg/m3)'], fontsize=11, loc='upper left')
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
-        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.png', bbox_inches='tight')
-        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_30s_Leica_all_2021_22.pdf', bbox_inches='tight')
+        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_15s_Leica_all_2021_22.png', bbox_inches='tight')
+        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_15s_Leica_all_2021_22.pdf', bbox_inches='tight')
     else:
         plt.show()
 

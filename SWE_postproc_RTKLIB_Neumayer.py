@@ -18,11 +18,6 @@ date:    8.8.2022
 
 # IMPORT modules
 import os
-import datetime as dt
-import glob
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 import preprocess
 
 # CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
@@ -43,6 +38,7 @@ yy = str(22)
 start_doy = 0
 end_doy = 5
 
+
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
 preprocess.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
@@ -52,12 +48,14 @@ preprocess.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR
 preprocess.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
 
+
 """ 1. run RTKLib automatically (instead of RTKPost Gui manually) """
 # process data using RTKLIB post processing command line tool 'rnx2rtkp' for a specific year and a range of day of years (doys)
 preprocess.automate_rtklib_pp(dst_path, 'NMER', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy,
                               'NMER', options_Emlid)
 preprocess.automate_rtklib_pp(dst_path, '3393', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy,
                               'NMLR', options_Leica)
+
 
 """ 2. Get RTKLib ENU solution files """
 # read all RTKLib ENU solution files (daily) and store them in one dataframe for whole season
@@ -104,7 +102,7 @@ predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = preproc
 preprocess.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
 
-''' 6. Plot results (SWE, ΔSWE, scatter) '''
+''' 7. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + 'plots/', exist_ok=True)
 
 # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
@@ -126,7 +124,7 @@ preprocess.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.
                         x_label='Laser', save=[False, True])
 
 
-# Q: plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
+# plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
 preprocess.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
                         save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
@@ -135,10 +133,13 @@ preprocess.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min,
 preprocess.plot_all_diffAcc(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
                             save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
-# TODO: write functions
+
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
-preprocess.plot_SWE_density_acc()
+preprocess.plot_SWE_density_acc(dst_path, gnss_leica, gnss_emlid, manual, laser_15min, save=False)
 
 
 # plot PPP position solutions
 df_ppp = preprocess.plot_PPP_solution(dst_path, save=False)
+
+
+# TODO: define classes (preprocess, process, plot) and adapt functions
