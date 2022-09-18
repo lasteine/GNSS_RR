@@ -212,6 +212,7 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                     with tarfile.open(fileobj=lzma.open(dest_file)) as tar:
                         tar.extractall(dest_path)
                         print('file decompressed: %s' % dest_file)
+                        # close xz file
                         tar.fileobj.close()
                 else:
                     print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
@@ -255,6 +256,8 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
             remove_folder(dest_path)
         else:
             print('temporary directory is NOT deleted!')
+
+    return year_max, doy_max, doy_file
 
 
 def convert_datetime2doy_rinexfiles(dest_path, rover_prefix, rover_name):
@@ -763,8 +766,8 @@ def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_laser.pkl'):
     dsh = laser[(laser.error == 0)].dsh
 
     # clean outliers
-    ul = dsh.median() + 1 * dsh.std()
-    ll = dsh.median() - 1 * dsh.std()
+    ul = dsh.median() + 2 * dsh.std()
+    ll = dsh.median() - 2 * dsh.std()
     fil_dsh = dsh[(dsh > ll) & (dsh < ul)]
 
     # filter observations
@@ -1181,8 +1184,8 @@ def plot_scatter(data_path, y_leica, y_emlid, x_value, x_label='Manual', save=[F
     # plt.plot(range(10, 750), predict_daily(range(10, 750)), c='crimson', linestyle='--', alpha=0.7)  # linear regression leica
     # plt.plot(range(10, 750), predict_emlid_daily(range(10, 750)), c='salmon', linestyle='-.', alpha=0.7)  # linear regression emlid
     ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=12)
-    ax.set_ylim(-50, 200)
-    ax.set_xlim(-50, 200)
+    ax.set_ylim(-100, 500)
+    ax.set_xlim(-100, 500)
     ax.set_xlabel(x_label + ' SWE (mm w.e.)', fontsize=12)
     plt.legend(['High-end', 'Low-cost'], fontsize=12, loc='upper left')
     plt.xticks(fontsize=12)
@@ -1201,7 +1204,7 @@ def plot_swediff_boxplot(dest_path, diffs, save=[False, True]):
     diffs.dswe_manual.describe()
     diffs.dswe_laser.describe()
     diffs.dswe_emlid.describe()
-    diffs[['dswe_manual', 'dswe_laser', 'dswe_emlid']].plot.box(ylim=(-100, 200), figsize=(3, 4.5), fontsize=12, rot=15)
+    diffs[['dswe_manual', 'dswe_laser', 'dswe_emlid']].plot.box(ylim=(-100, 500), figsize=(3, 4.5), fontsize=12, rot=15)
     plt.grid()
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=12)
     if save is True:

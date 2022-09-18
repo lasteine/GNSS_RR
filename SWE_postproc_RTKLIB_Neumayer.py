@@ -41,15 +41,16 @@ end_doy = 5
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
-f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
+year_max_emlid, doy_max_emlid, doy_file_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
-f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
+year_max, doy_max, doy_file = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
 f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
 
 
 """ 1. run RTKLib automatically (instead of RTKPost Gui manually) """
+# TODO: tell from file check in step0, year_max and start_doy=doy_max and end_doy=doy_file
 # process data using RTKLIB post processing command line tool 'rnx2rtkp' for a specific year and a range of day of years (doys)
 f.automate_rtklib_pp(dst_path, 'NMER', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy,
                               'NMER', options_Emlid)
@@ -101,27 +102,26 @@ predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = f.calcu
 # calculate RMSE, MRB, and number of samples
 f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
-
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + 'plots/', exist_ok=True)
 
 # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
 f.plot_all_SWE(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
-                        save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+               save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 # plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
 f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
-                            save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                   save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 # plot boxplot of differences (Emlid, manual, laser compared to Leica)
 f.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=False)
 
 # plot scatter plot (GNSS vs. manual/laser, daily/15min)
 f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt,
-                        x_label='Manual', save=[False, True])
+               x_label='Manual', save=[False, True])
 
 f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe,
-                        x_label='Laser', save=[False, True])
+               x_label='Laser', save=[False, True])
 
 
 # plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
