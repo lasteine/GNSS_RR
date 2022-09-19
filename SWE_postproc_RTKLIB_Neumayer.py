@@ -31,7 +31,7 @@ nav = '3387'
 sp3 = 'COD'
 ti_int = '900'
 resolution = '15min'
-options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer'
+options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer_900_15'
 options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neumayer_900_15'
 ending = ''  # e.g. a variant of the processing '_eleambmask15', '_noglonass'
 yy = str(22)
@@ -79,6 +79,8 @@ df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_l
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
     dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='shm/nm_laser.pkl')
 
+# clear outliers in laser data
+laser_filtered = laser_filtered[(laser_filtered.dsh_std < 75)]
 
 ''' 5. Convert swe to snow accumulation and add to df '''
 gnss_leica = f.convert_swe2sh_gnss(swe_gnss_leica, ipol_density=ipol)
@@ -97,6 +99,7 @@ diffs_sh_15min, diffs_swe_15min, laser_15min = f.calculate_differences2gnss_15mi
 corr_leica_daily, corr_emlid_daily, corr_leica_15min, corr_emlid_15min = f.calculate_crosscorr(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min)
 
 # fit linear regression curve manual/laser vs. GNSS (daily & 15min)
+# TODO: something wrong, find error, length mismatch
 predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = f.calculate_linearfit(leica_daily, manual, gnss_leica, gnss_emlid, laser_15min)
 
 # calculate RMSE, MRB, and number of samples
@@ -118,10 +121,10 @@ f.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=False)
 
 # plot scatter plot (GNSS vs. manual/laser, daily/15min)
 f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt,
-               x_label='Manual', save=[False, True])
+               x_label='Manual', save=False)
 
 f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe,
-               x_label='Laser', save=[False, True])
+               x_label='Laser', save=False)
 
 
 # plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
@@ -130,7 +133,7 @@ f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_dai
 
 
 # plot Difference in Accumulation (compared to Leica)
-f.plot_all_diffAcc(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
+f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
                             save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 

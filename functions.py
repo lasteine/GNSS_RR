@@ -610,14 +610,32 @@ def filter_rtklib_solutions(dest_path, df_enu, rover_name, resolution, ambiguity
     print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
     jump = m[(m.diff() < -1000)]  # detect jumps (> 1000mm) in the dataset
 
-    if jump.empty is True:
-        print('\nno jump detected!')
-        swe_gnss = m - m[0]
-    else:
+    while jump.empty is False:
         print('\njump of height %s is detected!' % jump[0])
         adj = m[(m.index > jump.index.format()[0])] - jump[0]  # correct jump [0]
-        m_adj = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
-        swe_gnss = m_adj - m_adj[0]
+        m = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
+        jump = m[(m.diff() < -1000)]
+
+    print('\nno jump detected!')
+    swe_gnss = m - m[0]
+
+    # if jump.empty is True:
+    #     print('\nno jump detected!')
+    #     swe_gnss = m - m[0]
+    # else:
+        # print('\njump of height %s is detected!' % jump[0])
+        # adj = m[(m.index > jump.index.format()[0])] - jump[0]  # correct jump [0]
+        # m_adj = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
+        # swe_gnss = m_adj - m_adj[0]
+        #
+        # # check for second jump
+        # m = swe_gnss
+        # print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
+        # jump = m[(m.diff() < -1000)]  # detect jumps (> 1000mm) in the dataset
+        # print('\njump of height %s is detected!' % jump[0])
+        # adj = m[(m.index > jump.index.format()[0])] - jump[0]  # correct jump [0]
+        # m_adj = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
+        # swe_gnss = m_adj - m_adj[0]
 
     swe_gnss.index = swe_gnss.index + pd.Timedelta(seconds=18)
 
@@ -1063,9 +1081,9 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
     print('MRB (laser vs. GNSS, 15min), Emlid: %.1f' % mrb_laser_emlid)
 
     # Number of samples
-    n_manual = len(diffs_swe_daily.dswe_manual)
+    n_manual = len(diffs_swe_daily.dswe_manual.dropna())
     print('\nNumber of samples (manual vs. GNSS, daily), Leica: %.0f' % n_manual)
-    n_manual_emlid = len(diffs_swe_daily.dswe_manual_emlid)
+    n_manual_emlid = len(diffs_swe_daily.dswe_manual_emlid.dropna())
     print('\nNumber of samples (manual vs. GNSS, daily), Emlid: %.0f' % n_manual_emlid)
     n_laser = len(diffs_swe_15min.dswe_laser)
     print('Number of samples (laser vs. GNSS, 15min): %.0f' % n_laser)
@@ -1075,10 +1093,10 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
 
 """ Define plot functions """
 
-# TODO: write function here
+
 def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, True]):
     plt.figure()
-    leica.dswe.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1000)).grid()
+    leica.dswe.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400)).grid()
     emlid.dswe.plot(color='salmon', linestyle='--')
     plt.errorbar(manual.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
     laser.dsh.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
@@ -1112,7 +1130,7 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.close()
     plt.figure()
     if leica is not None:
-        leica.dswe.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
+        leica.dswe.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 600)).grid()
     if emlid is not None:
         emlid.dswe.plot(color='salmon', linestyle='--')
     if manual is not None:
@@ -1131,7 +1149,7 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
 
     plt.xlabel(None)
     plt.ylabel('SWE (mm w.e.)', fontsize=14)
-    plt.legend(leg, fontsize=12, loc='lower right')
+    plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
@@ -1147,7 +1165,7 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
     """
     plt.close()
     plt.figure()
-    diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
+    diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-200, 600)).grid()
     if manual is not None:
         diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
         plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='k', linestyle='', capsize=4, alpha=0.5)
@@ -1161,7 +1179,7 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
 
     plt.xlabel(None)
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
-    plt.legend(leg, fontsize=12, loc='lower right')
+    plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
@@ -1184,8 +1202,8 @@ def plot_scatter(data_path, y_leica, y_emlid, x_value, x_label='Manual', save=[F
     # plt.plot(range(10, 750), predict_daily(range(10, 750)), c='crimson', linestyle='--', alpha=0.7)  # linear regression leica
     # plt.plot(range(10, 750), predict_emlid_daily(range(10, 750)), c='salmon', linestyle='-.', alpha=0.7)  # linear regression emlid
     ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=12)
-    ax.set_ylim(-100, 500)
-    ax.set_xlim(-100, 500)
+    ax.set_ylim(-100, 600)
+    ax.set_xlim(-100, 600)
     ax.set_xlabel(x_label + ' SWE (mm w.e.)', fontsize=12)
     plt.legend(['High-end', 'Low-cost'], fontsize=12, loc='upper left')
     plt.xticks(fontsize=12)
@@ -1204,7 +1222,7 @@ def plot_swediff_boxplot(dest_path, diffs, save=[False, True]):
     diffs.dswe_manual.describe()
     diffs.dswe_laser.describe()
     diffs.dswe_emlid.describe()
-    diffs[['dswe_manual', 'dswe_laser', 'dswe_emlid']].plot.box(ylim=(-100, 500), figsize=(3, 4.5), fontsize=12, rot=15)
+    diffs[['dswe_manual', 'dswe_laser', 'dswe_emlid']].plot.box(ylim=(-200, 600), figsize=(3, 4.5), fontsize=12, rot=15)
     plt.grid()
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=12)
     if save is True:
@@ -1220,7 +1238,7 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.close()
     plt.figure()
     if leica is not None:
-        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
+        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400)).grid()
     if emlid is not None:
         emlid.dsh.plot(color='salmon', linestyle='--')
     if manual is not None:
@@ -1239,7 +1257,7 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
 
     plt.xlabel(None)
     plt.ylabel('Snow accumulation (mm)', fontsize=14)
-    plt.legend(leg, fontsize=12, loc='lower right')
+    plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
@@ -1250,17 +1268,17 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
         plt.show()
 
 
-def plot_all_diffAcc(data_path, diffs_sh, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
     plt.figure()
-    diffs_sh.dsh_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-100, 500)).grid()
+    diffs_sh_15min.dsh_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-400, 1000)).grid()
     if manual is not None:
         diffs_sh.dsh_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
         plt.errorbar(diffs_sh.dsh_manual.index, diffs_sh.dsh_manual, yerr=diffs_sh.dsh_manual / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
-        diffs_sh.dsh_laser.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+        diffs_sh_15min.dsh_laser.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
     if buoy is not None:
         plt.plot(diffs_sh[['dsh_buoy1', 'dsh_buoy2', 'dsh_buoy3', 'dsh_buoy4']], color='lightgrey', linestyle='-')
     if poles is not None:
@@ -1269,7 +1287,7 @@ def plot_all_diffAcc(data_path, diffs_sh, manual=None, laser=None, buoy=None, po
 
     plt.xlabel(None)
     plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
-    plt.legend(leg, fontsize=12, loc='lower right')
+    plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
