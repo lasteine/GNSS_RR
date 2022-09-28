@@ -1213,7 +1213,7 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
 
 def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predict_emlid_daily=None, x_label='Manual', save=[False, True]):
     plt.close()
-    plt.figure(figsize=(4.5, 4.5))
+    plt.figure(figsize=(3.5, 4.5))
     leica_x = pd.concat([y_leica, x_value], axis=1)
     leica_x.columns = ['dswe_y', 'dswe_x']
     emlid_x = pd.concat([y_emlid, x_value], axis=1)

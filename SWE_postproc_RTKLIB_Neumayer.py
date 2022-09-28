@@ -127,18 +127,17 @@ f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe, pre
 
 # plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
 f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
-                        save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+               save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 
 # plot Difference in Accumulation (compared to Leica)
 f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
-                            save=False, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                   save=False, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
 f.plot_SWE_density_acc(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
                        save=False, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
-
 
 
 ## plot PPP position solutions
