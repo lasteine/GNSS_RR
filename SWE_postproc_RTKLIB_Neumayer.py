@@ -19,6 +19,7 @@ date:    8.8.2022
 # IMPORT modules
 import os
 import functions as f
+import matplotlib.pyplot as plt
 
 # CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
 scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'  # data source path at AWI server (data copied from Antarctica via O2A)
@@ -67,11 +68,11 @@ df_enu_leica = f.get_rtklib_solutions(dst_path, 'NMLR', resolution, ending, head
 ''' 3. Filter and clean ENU solution data '''
 # filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening) and store results in pickle and .csv
 df_enu_emlid, fil_df_emlid, fil_emlid, fil_clean_emlid, m_emlid, s_emlid, jump_emlid, swe_gnss_emlid, swe_gnss_daily_emlid, std_gnss_daily_emlid = f.filter_rtklib_solutions(
-    dst_path, df_enu_emlid, 'NMER', resolution, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
+    dst_path, 'NMER', resolution, df_enu=None, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
     resample=False, resample_resolution='30min', ending=ending)
 
 df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_leica, swe_gnss_leica, swe_gnss_daily_leica, std_gnss_daily_leica = f.filter_rtklib_solutions(
-    dst_path, df_enu_leica, 'NMLR', resolution, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
+    dst_path, 'NMLR', resolution, df_enu=None, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
     resample=False, resample_resolution='30min', ending=ending)
 
 
@@ -79,8 +80,6 @@ df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_l
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
     dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='shm/nm_laser.pkl')
 
-# clear outliers in laser data
-laser_filtered = laser_filtered[(laser_filtered.dsh_std < 75)]
 
 ''' 5. Convert swe to snow accumulation and add to df '''
 gnss_leica = f.convert_swe2sh_gnss(swe_gnss_leica, ipol_density=ipol)
@@ -108,13 +107,17 @@ f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + 'plots/', exist_ok=True)
 
+
+# todo: add linear regressions to scatter plots
+# todo: store all plots
+
 # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
-f.plot_all_SWE(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
-               save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+f.plot_all_SWE(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min, buoy_daily, poles_daily,
+               save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
 
 # plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
 f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
-                   save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                   save=False, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 # plot boxplot of differences (Emlid, manual, laser compared to Leica)
 f.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=False)
@@ -134,15 +137,17 @@ f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_dai
 
 # plot Difference in Accumulation (compared to Leica)
 f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
-                            save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                            save=False, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
-f.plot_SWE_density_acc(dst_path, gnss_leica, gnss_emlid, manual, laser_15min, save=False)
+f.plot_SWE_density_acc(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
+                       save=False, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
 
 
-# plot PPP position solutions
-df_ppp = f.plot_PPP_solution(dst_path, save=False)
+
+## plot PPP position solutions
+# df_ppp = f.plot_PPP_solution(dst_path, save=False)
 
 
 # TODO: define classes (preprocess, process, plot) and adapt functions

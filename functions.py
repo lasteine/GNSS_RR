@@ -558,7 +558,7 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_lengt
     return df_enu
 
 
-def filter_rtklib_solutions(dest_path, df_enu, rover_name, resolution, ambiguity=[1, 2, 5], ti_set_swe2zero=12, threshold=3, window='D', resample=[True, False], resample_resolution='30min', ending=''):
+def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambiguity=[1, 2, 5], ti_set_swe2zero=12, threshold=3, window='D', resample=[True, False], resample_resolution='30min', ending=''):
     """ filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening)
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :param df_enu: pandas dataframe containing all seasons solution data columns ['date', 'time', 'U (m)', 'amb_state', 'nr_sat', 'std_u (m)']
@@ -780,17 +780,26 @@ def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_laser.pkl'):
 
     # Q: filter laser observations
     print('\n-- filtering laser observations')
-    # select only observations without errors
+    # 0. select only observations without errors
     dsh = laser[(laser.error == 0)].dsh
 
-    # clean outliers
-    ul = dsh.median() + 2 * dsh.std()
-    ll = dsh.median() - 2 * dsh.std()
-    fil_dsh = dsh[(dsh > ll) & (dsh < ul)]
+    # 1. only select observations bigger than the minimum oultier
+    f = dsh[(dsh > dsh.min())]
 
-    # filter observations
+    # 2. only select observations where the gradient is smaller than 50cm (iteration)
+    outliers = f.index[(f.diff() > 500) | (f.diff() < -500)]
+    while outliers.empty is False:
+        outliers = f.index[(f.diff() > 500) | (f.diff() < -500)]
+        fil_dsh = f.loc[~f.index.isin(outliers)]
+        f = fil_dsh
+
+    # 3. filter observations
     dsh_laser = fil_dsh.rolling('D').median()
     dsh_laser_std = fil_dsh.rolling('D').std()
+
+    # 4. manually exclude remaining outliers
+    exclude_indizes = dsh_laser['2022-05'].index[(dsh_laser['2022-05'] < 400)]
+    dsh_laser = dsh_laser.loc[~(dsh_laser.index.isin(exclude_indizes))]
 
     # Q: calculate SWE from accumulation data
     print('\n-- convert laser observations to SWE')
@@ -1094,10 +1103,10 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
 """ Define plot functions """
 
 
-def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, True]):
+def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, True], std_leica=None, std_emlid=None):
     plt.figure()
-    leica.dswe.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400)).grid()
-    emlid.dswe.plot(color='salmon', linestyle='--')
+    leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400)).grid()
+    emlid.plot(color='salmon', linestyle='--')
     plt.errorbar(manual.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
     laser.dsh.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
     manual.Acc.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
@@ -1107,6 +1116,10 @@ def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, Tr
     manual.Density_aboveAnt.plot(color='steelblue', linestyle=' ', marker='*', markersize=8, markeredgewidth=2, label='Density (kg/m3)').grid()
     plt.errorbar(manual.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k', linestyle='', capsize=4,
                  alpha=0.5)
+    if std_leica is not None:
+        plt.fill_between(leica.index, leica - std_leica, leica + std_leica, color="crimson", alpha=0.2)
+    if std_emlid is not None:
+        plt.fill_between(emlid.index, emlid - std_emlid, emlid + std_emlid, color="salmon", alpha=0.2)
     # plt.fill_between(sh_std.index, sh - sh_std, sh + sh_std, color="darkblue", alpha=0.2)
     # plt.fill_between(s_15min.index, (m_15min-m_15min[0]) - s_15min, (m_15min-m_15min[0]) + s_15min, color="crimson", alpha=0.2)
     plt.xlabel(None)
@@ -1124,15 +1137,15 @@ def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, Tr
         plt.show()
 
 
-def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=None, std_emlid=None):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
     plt.figure()
     if leica is not None:
-        leica.dswe.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 600)).grid()
+        leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 600)).grid()
     if emlid is not None:
-        emlid.dswe.plot(color='salmon', linestyle='--')
+        emlid.plot(color='salmon', linestyle='--')
     if manual is not None:
         manual.SWE_aboveAnt.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
         plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k', linestyle='', capsize=4, alpha=0.5)
@@ -1142,10 +1155,10 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
         plt.plot(buoy[['dswe1', 'dswe2', 'dswe3', 'dswe4']], color='lightgrey', linestyle='-')
     if poles is not None:
         plt.plot(poles[['dswe1', 'dswe2', 'dswe3', 'dswe4', 'dswe5', 'dswe6', 'dswe7', 'dswe8', 'dswe9', 'dswe10', 'dswe11', 'dswe12', 'dswe13', 'dswe14', 'dswe15', 'dswe16']], linestyle=':', alpha=0.6)
-    if leica is not None:
-        plt.fill_between(leica.index, leica.dswe - leica.dswe / 10, leica.dswe + leica.dswe / 10, color="crimson", alpha=0.2)
-    if emlid is not None:
-        plt.fill_between(emlid.index, emlid.dswe - emlid.dswe / 10, emlid.dswe + emlid.dswe / 10, color="salmon", alpha=0.2)
+    if std_leica is not None:
+        plt.fill_between(leica.index, leica - std_leica, leica + std_leica, color="crimson", alpha=0.2)
+    if std_emlid is not None:
+        plt.fill_between(emlid.index, emlid - std_emlid, emlid + std_emlid, color="salmon", alpha=0.2)
 
     plt.xlabel(None)
     plt.ylabel('SWE (mm w.e.)', fontsize=14)
@@ -1160,14 +1173,14 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
         plt.show()
 
 
-def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)']):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
     plt.figure()
     diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-200, 600)).grid()
     if manual is not None:
-        diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
+        diffs_swe.dswe_manual.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
         plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='k', linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
         diffs_swe.dswe_laser.plot(color='k', linestyle='--', label='Accumulation (cm)').grid()
@@ -1175,7 +1188,6 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
         plt.plot(diffs_swe[['dswe_buoy1', 'dswe_buoy2', 'dswe_buoy3', 'dswe_buoy4']], color='lightgrey', linestyle='-')
     if poles is not None:
         plt.plot(diffs_swe[['dswe_pole1', 'dswe_pole2', 'dswe_pole3', 'dswe_pole4', 'dswe_pole5', 'dswe_pole6', 'dswe_pole7', 'dswe_pole8', 'dswe_pole9', 'dswe_pole10', 'dswe_pole11', 'dswe_pole12', 'dswe_pole13', 'dswe_pole14', 'dswe_pole15', 'dswe_pole16']], linestyle=':', alpha=0.6)
-    plt.fill_between(diffs_swe.dswe_emlid.index, diffs_swe.dswe_emlid - diffs_swe.dswe_emlid / 10, diffs_swe.dswe_emlid + diffs_swe.dswe_emlid / 10, color="salmon", alpha=0.2)
 
     plt.xlabel(None)
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
@@ -1250,10 +1262,6 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
         plt.plot(buoy[['dsh1', 'dsh2', 'dsh3', 'dsh4']], color='lightgrey', linestyle='-')
     if poles is not None:
         plt.plot(poles[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']], linestyle=':', alpha=0.6)
-    if leica is not None:
-        plt.fill_between(leica.index, leica.dsh - leica.dsh / 10, leica.dsh + leica.dsh / 10, color="crimson", alpha=0.2)
-    if emlid is not None:
-        plt.fill_between(emlid.index, emlid.dsh - emlid.dsh / 10, emlid.dsh + emlid.dsh / 10, color="salmon", alpha=0.2)
 
     plt.xlabel(None)
     plt.ylabel('Snow accumulation (mm)', fontsize=14)
@@ -1268,7 +1276,7 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
         plt.show()
 
 
-def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)']):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
@@ -1283,7 +1291,6 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
         plt.plot(diffs_sh[['dsh_buoy1', 'dsh_buoy2', 'dsh_buoy3', 'dsh_buoy4']], color='lightgrey', linestyle='-')
     if poles is not None:
         plt.plot(diffs_sh[['dsh_pole1', 'dsh_pole2', 'dsh_pole3', 'dsh_pole4', 'dsh_pole5', 'dsh_pole6', 'dsh_pole7', 'dsh_pole8', 'dsh_pole9', 'dsh_pole10', 'dsh_pole11', 'dsh_pole12', 'dsh_pole13', 'dsh_pole14', 'dsh_pole15', 'dsh_pole16']], linestyle=':', alpha=0.6)
-    plt.fill_between(diffs_sh.dsh_emlid.index, diffs_sh.dsh_emlid - diffs_sh.dsh_emlid / 10, diffs_sh.dsh_emlid + diffs_sh.dsh_emlid / 10, color="salmon", alpha=0.2)
 
     plt.xlabel(None)
     plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
