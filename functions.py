@@ -1029,8 +1029,9 @@ def calculate_crosscorr(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid
     return corr_leica_daily, corr_emlid_daily, corr_leica_15min, corr_emlid_15min
 
 
-def calculate_linearfit(leica_daily, manual, gnss_leica, gnss_emlid, laser_15min):
+def calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min):
     """ calculate linear regression coefficients between GNSS and manual/laser observations
+        :param emlid_daily: GNSS SWE/SH estimtions from low-cost sensor, daily resolution
         :param leica_daily: GNSS SWE/SH estimtions from high-end sensor, daily resolution
         :param manual: manual SWE/SH observations, daily resolution
         :param gnss_leica: GNSS SWE/SH estimtions from high-end sensor, 15min resolution
@@ -1039,24 +1040,32 @@ def calculate_linearfit(leica_daily, manual, gnss_leica, gnss_emlid, laser_15min
         :return predict_daily, predict_15min, predict_15min_emlid
     """
     # fit linear regression curve manual vs. GNSS (daily), Leica
-    fit_daily = np.polyfit(manual.SWE_aboveAnt, leica_daily.dswe, 1)
+    joined = pd.concat([manual.SWE_aboveAnt, leica_daily.dswe], axis=1).dropna()
+    fit_daily = np.polyfit(joined.SWE_aboveAnt, joined.dswe, 1)
     predict_daily = np.poly1d(fit_daily)
-    print('\nLinear fit (manual vs. GNSS, daily): \nm = ', round(fit_daily[0], 2), '\nb = ', int(fit_daily[1]))
+    print('\nLinear fit (manual vs. GNSS, daily), Leica: m = ', round(fit_daily[0], 2), ', b = ', int(fit_daily[1]))
 
     # fit linear regression curve manual vs. GNSS (daily), Emlid
-    fit_emlid_daily = np.polyfit(manual.SWE_aboveAnt, leica_daily.dswe, 1)
+    joined = pd.concat([manual.SWE_aboveAnt, emlid_daily.dswe], axis=1).dropna()
+    fit_emlid_daily = np.polyfit(joined.SWE_aboveAnt, joined.dswe, 1)
     predict_emlid_daily = np.poly1d(fit_emlid_daily)
-    print('\nLinear fit (manual vs. GNSS, daily): \nm = ', round(fit_emlid_daily[0], 2), '\nb = ', int(fit_emlid_daily[1]))
+    print('Linear fit (manual vs. GNSS, daily), Emlid: \m = ', round(fit_emlid_daily[0], 2), ', b = ', int(fit_emlid_daily[1]))
 
     # fit linear regression curve laser vs. GNSS (15min), Leica
-    fit_15min = np.polyfit(laser_15min.dswe, gnss_leica.dswe, 1)
+    joined = pd.concat([laser_15min.dswe, gnss_leica.dswe], axis=1).dropna()
+    joined.columns = ['dswe_laser', 'dswe_gnss']
+    joined = joined['2021-12-23':]
+    fit_15min = np.polyfit(joined.dswe_laser, joined.dswe_gnss, 1)
     predict_15min = np.poly1d(fit_15min)
-    print('Linear fit (laser vs. GNSS, 15min), Leica: \nm = ', round(fit_15min[0], 2), '\nb = ', int(fit_15min[1]))
+    print('Linear fit (laser vs. GNSS, 15min), Leica: nm = ', round(fit_15min[0], 2), ', b = ', int(fit_15min[1]))
 
     # fit linear regression curve laser vs. GNSS (15min), Emlid
-    fit_15min_emlid = np.polyfit(laser_15min.dswe, gnss_emlid.dswe, 1)
+    joined = pd.concat([laser_15min.dswe, gnss_emlid.dswe], axis=1).dropna()
+    joined.columns = ['dswe_laser', 'dswe_gnss']
+    joined = joined['2021-12-23':]
+    fit_15min_emlid = np.polyfit(joined.dswe_laser, joined.dswe_gnss, 1)
     predict_15min_emlid = np.poly1d(fit_15min_emlid)
-    print('Linear fit (laser vs. GNSS, 15min), Emlid: \nm = ', round(fit_15min_emlid[0], 2), '\nb = ', int(fit_15min_emlid[1]))  # n=12, m=1.02, b=-8 mm w.e.
+    print('Linear fit (laser vs. GNSS, 15min), Emlid: nm = ', round(fit_15min_emlid[0], 2), ', b = ', int(fit_15min_emlid[1]))  # n=12, m=1.02, b=-8 mm w.e.
 
     return predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid
 
@@ -1202,22 +1211,24 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
         plt.show()
 
 
-def plot_scatter(data_path, y_leica, y_emlid, x_value, x_label='Manual', save=[False, True]):
+def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predict_emlid_daily=None, x_label='Manual', save=[False, True]):
     plt.close()
-    plt.figure(figsize=(5, 4.5))
+    plt.figure(figsize=(4.5, 4.5))
     leica_x = pd.concat([y_leica, x_value], axis=1)
     leica_x.columns = ['dswe_y', 'dswe_x']
     emlid_x = pd.concat([y_emlid, x_value], axis=1)
     emlid_x.columns = ['dswe_y', 'dswe_x']
     ax = leica_x.plot.scatter(x='dswe_x', y='dswe_y', color='k')
     emlid_x.plot.scatter(x='dswe_x', y='dswe_y', color='salmon', ax=ax)
-    # plt.plot(range(10, 750), predict_daily(range(10, 750)), c='crimson', linestyle='--', alpha=0.7)  # linear regression leica
-    # plt.plot(range(10, 750), predict_emlid_daily(range(10, 750)), c='salmon', linestyle='-.', alpha=0.7)  # linear regression emlid
+    if predict_daily is not None:
+        plt.plot(range(50, 550), predict_daily(range(50, 550)), c='k', linestyle='--', alpha=0.7)  # linear regression leica
+    if predict_emlid_daily is not None:
+        plt.plot(range(50, 550), predict_emlid_daily(range(50, 550)), c='salmon', linestyle='-.', alpha=0.7)  # linear regression emlid
     ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=12)
     ax.set_ylim(-100, 600)
     ax.set_xlim(-100, 600)
     ax.set_xlabel(x_label + ' SWE (mm w.e.)', fontsize=12)
-    plt.legend(['High-end', 'Low-cost'], fontsize=12, loc='upper left')
+    plt.legend(['High-end GNSS', 'Low-cost GNSS'], fontsize=12, loc='upper left')
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
     plt.grid()

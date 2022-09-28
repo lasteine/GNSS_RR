@@ -98,18 +98,13 @@ diffs_sh_15min, diffs_swe_15min, laser_15min = f.calculate_differences2gnss_15mi
 corr_leica_daily, corr_emlid_daily, corr_leica_15min, corr_emlid_15min = f.calculate_crosscorr(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min)
 
 # fit linear regression curve manual/laser vs. GNSS (daily & 15min)
-# TODO: something wrong, find error, length mismatch
-predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = f.calculate_linearfit(leica_daily, manual, gnss_leica, gnss_emlid, laser_15min)
+predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = f.calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min)
 
 # calculate RMSE, MRB, and number of samples
 f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + 'plots/', exist_ok=True)
-
-
-# todo: add linear regressions to scatter plots
-# todo: store all plots
 
 # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
 f.plot_all_SWE(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min, buoy_daily, poles_daily,
@@ -123,10 +118,10 @@ f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, p
 f.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=False)
 
 # plot scatter plot (GNSS vs. manual/laser, daily/15min)
-f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt,
+f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt, predict_daily, predict_emlid_daily,
                x_label='Manual', save=False)
 
-f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe,
+f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe, predict_15min, predict_15min_emlid,
                x_label='Laser', save=False)
 
 
