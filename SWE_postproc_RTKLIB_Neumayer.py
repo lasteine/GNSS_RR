@@ -12,8 +12,9 @@ input:  - GNSS config file (.conf)
 output: - position (.pos) file; (UTC, E, N, U)
         - plots (SWE timeseries, DeltaSWE timeseries, scatter plots)
 
-created: L. Steiner (Orchid ID: 0000-0002-4958-0849)
-date:    8.8.2022
+created by: L. Steiner (Orchid ID: 0000-0002-4958-0849)
+created on: 8.8.2022
+updated on: 29.09.2022
 """
 
 # IMPORT modules
@@ -46,7 +47,7 @@ year_max_emlid, doy_max_emlid, doy_file_emlid = f.copy_rinex_files(scr_path + 'i
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
 year_max, doy_max, doy_file = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
-f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
+year_max_base, doy_max_base, doy_file_base = f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
 
 
@@ -102,6 +103,7 @@ predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = f.calcu
 
 # calculate RMSE, MRB, and number of samples
 f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
+
 
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + 'plots/', exist_ok=True)

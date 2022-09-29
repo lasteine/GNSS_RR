@@ -2,7 +2,7 @@
     Necessary preprocessing for daily file processing with RTKLib
     created by: L. Steiner
     created on: 17.05.2021
-    updated on: 18.05.2021
+    updated on: 29.09.2021
 """
 
 import subprocess
@@ -512,7 +512,7 @@ def run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file
         :param brdc_orbit_galileo: GNSS broadcast (predicted) orbit for GALILEO satellites
         :param precise_orbit: GNSS precise (post processed) orbit for multi-GNSS (GPS, GLONASS, GALILEO, BEIDOU)
     """
-    # change directory & run RTKLIB post processing command
+    # change directory & run RTKLIB post processing command 'rnx2rtkp'
     process = subprocess.Popen('cd ' + dest_path + ' && rnx2rtkp '
                                '-k ' + options + '.conf '
                                '-ti ' + ti_int + ' '
@@ -618,25 +618,6 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambi
 
     print('\nno jump detected!')
     swe_gnss = m - m[0]
-
-    # if jump.empty is True:
-    #     print('\nno jump detected!')
-    #     swe_gnss = m - m[0]
-    # else:
-        # print('\njump of height %s is detected!' % jump[0])
-        # adj = m[(m.index > jump.index.format()[0])] - jump[0]  # correct jump [0]
-        # m_adj = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
-        # swe_gnss = m_adj - m_adj[0]
-        #
-        # # check for second jump
-        # m = swe_gnss
-        # print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
-        # jump = m[(m.diff() < -1000)]  # detect jumps (> 1000mm) in the dataset
-        # print('\njump of height %s is detected!' % jump[0])
-        # adj = m[(m.index > jump.index.format()[0])] - jump[0]  # correct jump [0]
-        # m_adj = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
-        # swe_gnss = m_adj - m_adj[0]
-
     swe_gnss.index = swe_gnss.index + pd.Timedelta(seconds=18)
 
     # resample data per day, calculate median and standard deviation (noise) per day to fit manual reference data
