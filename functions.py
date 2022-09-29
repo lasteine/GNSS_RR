@@ -30,7 +30,7 @@ def create_folder(dest_path):
     # Q: create 'temp' directory if not existing
     if not os.path.exists(dest_path):
         os.makedirs(dest_path, exist_ok=True)
-        print(colored("\ntemp dir created: %s" % dest_path, 'blue'))
+        print(colored("\ntemp dir created: %s" % dest_path, 'yellow'))
     else:
         print(colored("\ntemp dir already existing: %s" % dest_path, 'blue'))
 
@@ -40,7 +40,7 @@ def remove_folder(dest_path):
     :param dest_path: local temporary directory for preprocessing the GNSS rinex files
     """
     shutil.rmtree(dest_path)
-    print(colored("\n!!! temporary directory removed: %s" % dest_path, 'blue'))
+    print(colored("\n!!! temporary directory removed: %s" % dest_path, 'yellow'))
 
 
 """ Define preprocessing functions """
@@ -52,6 +52,7 @@ def move_files2parentdir(dest_path, f):
     :param f: file in folder
     """
     # get parent directory
+    print(colored("move created daily obs files to parent dir", 'blue'))
     parent_dir = os.path.dirname(os.path.dirname(dest_path))
     # destination file in parent directory
     dest_path_file = os.path.join(parent_dir, f.split("\\")[-1])
@@ -173,19 +174,23 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                     shutil.unpack_archive(dest_file, dest_path)
                     print('file decompressed: %s' % dest_file)
                 else:
-                    print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
+                    # print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
+                    doy_file = None
                     pass
-
+            if doy_file is None:
+                print(colored('no new files available in source folder', 'green'))
         else:
             pass
 
         # Q: delete nav & zipped files
-        for f in glob.glob(dest_path + '*.*[BPzip]'):
-            os.remove(f)
-        print("nav files deleted %s" % dest_path)
+        if doy_file is not None:
+            for f in glob.glob(dest_path + '*.*[BPzip]'):
+                os.remove(f)
+            print("nav files deleted %s" % dest_path)
 
         # Q: split & merge day-overlapping Emlid rinex files to daily rinex files (for Emlid files only!)
-        dayoverlapping2daily_rinexfiles(dest_path, 'ReachM2_sladina-raw_', receiver, move, delete_temp)
+        if doy_file is not None:
+            dayoverlapping2daily_rinexfiles(dest_path, 'ReachM2_sladina-raw_', receiver, move, delete_temp)
 
     if receiver == 'NMLB' or receiver == 'NMLR':
         # Q: copy files from network drive to local temp folder
@@ -214,10 +219,15 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                         # close xz file
                         tar.fileobj.close()
                 else:
-                    print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
+                    # print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
+                    doy_file = None
                     pass
+            if doy_file is None:
+                print(colored('no new files available in source folder: %s', 'green'))
+
         else:
             pass
+
 
         # Q: move obs (and nav) files to parent dir
         if parent is True:
@@ -225,36 +235,44 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                 # copy observation (.yyd) & navigation (.yy[ngl]) files from base receiver
                 for f in glob.glob(dest_path + 'var/www/upload/' + receiver + '/*.*'):
                     shutil.move(f, dest_path)
-                print("obs & nav files moved to parent dir %s" % dest_path)
+                if doy_file is not None:
+                    print(colored("\nobs & nav files moved to parent dir %s" % dest_path, 'blue'))
             if receiver == 'NMLR':
                 # copy only observation (.yyd) files from rover receivers
                 for f in glob.glob(dest_path + 'var/www/upload/' + receiver + '/*.*d'):
                     shutil.move(f, dest_path)
-                print("obs files moved to parent dir %s" % dest_path)
+                if doy_file is not None:
+                    print(colored("\nobs files moved to parent dir %s" % dest_path, 'blue'))
         else:
             pass
 
         # Q: convert hatanaka compressed rinex (.yyd) to uncompressed rinex observation (.yyo) files
         if hatanaka is True:
-            for hatanaka_file in glob.glob(dest_path + '*.*d'):
-                print('decompress hatanaka file: ', hatanaka_file)
-                # subprocess.Popen('crx2rnx ' + hatanaka_file)
-                subprocess.call('crx2rnx ' + hatanaka_file)
+            if doy_file is not None:
+                print(colored("\ndecompress hatanaka rinex files", 'blue'))
+                for hatanaka_file in glob.glob(dest_path + '*.*d'):
+                    print('decompress hatanaka file: ', hatanaka_file)
+                    # subprocess.Popen('crx2rnx ' + hatanaka_file)
+                    subprocess.call('crx2rnx ' + hatanaka_file)
+                print(colored("\nfinished decompressing hatanaka rinex files", 'blue'))
         else:
             pass
 
         # Q: move all obs (and nav) files from temp to parent directory
         if move is True:
-            for f in glob.glob(dest_path + '*.*[ongl]'):
-                move_files2parentdir(dest_path, f)
+            if doy_file is not None:
+                print(colored("\nmove decompressed files to parent dir", 'blue'))
+                for f in glob.glob(dest_path + '*.*[ongl]'):
+                    move_files2parentdir(dest_path, f)
+                print(colored("\nfinished moving decompressed files to parent dir", 'blue'))
         else:
             print('files are NOT moved to parent directory!')
 
-        # Q: delete temp directory
-        if delete_temp is True:
-            remove_folder(dest_path)
-        else:
-            print('temporary directory is NOT deleted!')
+    # Q: delete temp directory
+    if delete_temp is True:
+        remove_folder(dest_path)
+    else:
+        print('temporary directory is NOT deleted!')
 
     return year_max, doy_max, doy_file
 
@@ -269,6 +287,7 @@ def convert_datetime2doy_rinexfiles(dest_path, rover_prefix, rover_name):
     output filename: 'NMER329[a..d].21o'                    [rover_prefix + doy + '0.' + yy + 'o']
     """
     # Q: get doy from rinex filenames in temp dir with name structure: 'ReachM2_sladina-raw_202112041058.21O' [rover_prefix + datetime + '.' + yy + 'O']
+    print(colored('\nrenaming all files', 'blue'))
     for f in glob.iglob(dest_path + rover_prefix + '*.*O', recursive=True):
         # get rinex filename and year
         rover_file = os.path.basename(f)
@@ -311,10 +330,11 @@ def split_rinex(dest_path, rover_name):
     gfzrnx split input:  'NMER329[a..d].21o'    [rover + doy + '.' + yy + 'o']
     gfzrnx split output: '    00XXX_R_20213291100_01D_30S_MO.rnx'
     """
+    print(colored('\nstart splitting day-overlapping rinex files', 'blue'))
     for f in glob.iglob(dest_path + rover_name + '*.*o', recursive=True):
         # get filename
         rover_file = os.path.basename(f)
-        print(colored('\nstart splitting day-overlapping rinex file: %s' % rover_file, 'blue'))
+        print('\nstart splitting day-overlapping rinex file: %s' % rover_file)
 
         # split rinex file at midnight with command: 'gfzrnx -finp NMER345.21o -fout ::RX3:: -split 86400'
         process1 = subprocess.Popen('cd ' + dest_path + ' && '
@@ -339,6 +359,7 @@ def rename_splitted_rinexfiles(dest_path, rover_name):
     gfzrx merge input:  'NMER00XXX_R_20213291100_01D_30S_MO.yyo'
     """
     # Q: rename all .rnx files (gfzrnx split output --> gfzrnx merge input)
+    print(colored('\nrenaming all splitted rinex files', 'blue'))
     for f in glob.iglob(dest_path + '*.rnx', recursive=True):
         rover_file = os.path.basename(f)
         yy = rover_file.split('_')[2][2:4]
@@ -356,6 +377,7 @@ def merge_rinex(dest_path):
     gfzrnx merge input:  'NMER00XXX_R_2021329????_01D_30S_MO.yyo'
     gfzrnx merge output: 'NMER00XXX_R_2021330????_01D_30S_MO.rnx'
     """
+    print(colored('\nmerging all rinex files per day at: %s' % dest_path, 'blue'))
     for f in glob.iglob(dest_path + 'NMER00XXX_R_20' + '*.*O', recursive=True):
         # get filename
         rover_file = os.path.basename(f)
@@ -378,7 +400,7 @@ def merge_rinex(dest_path):
     print(colored('\nfinished merging all rinex files per day at: %s' % dest_path, 'blue'))
 
 
-def rename_merged_rinexfiles(dest_path, rover_name, move=[True, False], delete_temp=[True, False]):
+def rename_merged_rinexfiles(dest_path, rover_name, move=[True, False]):
     """ rename gfzrnx merge files output names to match rtklib and leica rinex file names:
     :param dest_path: local temporary directory for preprocessing the GNSS rinex files
     :param rover_name: name of rover receiver
@@ -404,12 +426,6 @@ def rename_merged_rinexfiles(dest_path, rover_name, move=[True, False], delete_t
     else:
         print('renamed merged daily files are NOT moved to parent directory!')
 
-    # delete 'temp' directory and remaining files in 'temp' directory
-    if delete_temp is True:
-        remove_folder(dest_path)
-    else:
-        print('temporary directory is kept!')
-
 
 def dayoverlapping2daily_rinexfiles(dest_path, rover_prefix, receiver, move=[True, False], delete_temp=[True, False]):
     """ convert day-overlapping Emlid rinex files to daily rinex files names to match rtklib input and leica files
@@ -433,7 +449,84 @@ def dayoverlapping2daily_rinexfiles(dest_path, rover_prefix, receiver, move=[Tru
     merge_rinex(dest_path)
 
     # rename merged (daily) rinex files to match rtklib input format [rover_prefix + doy + '0.' + yy + 'o'] & move to parent directory & delete temp dir
-    rename_merged_rinexfiles(dest_path, receiver, move, delete_temp)
+    rename_merged_rinexfiles(dest_path, receiver, move)
+
+
+def check_data_doys(dest_path, yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid, resolution):
+    """ check new data in the processing folder. Check if all data are available for all three receivers.
+    :param resolution: processing time interval (minutes) for naming of output folder
+    :param yy_base: newest year of Leica base observation files
+    :param start_doy_base: newest existing doy in the processing folder before copying new data for Leica base
+    :param end_doy_base: newest doy after copying new files to the processing folder for Leica base
+    :param yy: newest year of Leica rover observation files
+    :param start_doy: newest existing doy in the processing folder before copying new data for Leica rover
+    :param end_doy: newest doy after copying new files to the processing folder for Leica rover
+    :param yy_emlid: newest year of Emlid rover observation files
+    :param start_doy_emlid: newest existing doy in the processing folder before copying new data for Emlid rover
+    :param end_doy_emlid: newest doy after copying new files to the processing folder for Emlid rover
+    :return: yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid
+    """
+    print(colored("\ncheck new files (year and doy) in the processing folder", 'blue'))
+    # check if new files are present or not
+    if end_doy is None:
+        # newest doy is now last doy, as no new files are copied
+        end_doy = start_doy
+        doys = ['0']
+        # extract last processed doy from solution (.POS) files
+        for f in glob.iglob(dest_path + 'sol/NMLR/' + resolution + '/20' + yy + '*.POS', recursive=True):
+            sol_file = os.path.basename(f)
+            # extract doy from filename
+            doy = sol_file.split('.')[0][-3:]
+            # add doy to series of doys
+            doys.append(doy)
+        # get last doy from all processed solution files
+        start_doy = int(max(doys)) + 1
+
+    if end_doy_emlid is None:
+        end_doy_emlid = start_doy_emlid
+        doys = ['0']
+        # extract last processed doy from solution (.POS) files
+        for f in glob.iglob(dest_path + 'sol/NMER/' + resolution + '/20' + yy + '*.POS', recursive=True):
+            sol_file = os.path.basename(f)
+            # extract doy from filename
+            doy = sol_file.split('.')[0][-3:]
+            # add doy to series of doys
+            doys.append(doy)
+        # get last doy from all processed solution files
+        start_doy_emlid = int(max(doys)) + 1
+
+    if end_doy_base is None:
+        end_doy_base = start_doy_base
+        # get older doy from rover solution files
+        start_doy_base = int(min(start_doy, start_doy_emlid)) + 1
+
+    # check if newest year is similar for all receiver's data
+    if yy_base == yy:
+        print('\nLeica base and rover newest year of data is similar: %s' % yy_base)
+    else:
+        print(colored('\nLeica base and rover do NOT have similar newest year of data. CHECK raw data!', 'red'))
+        print('Newest years: \nLeica base = %s\nLeica rover = %s' % (yy_base, yy))
+
+    if yy_base == yy_emlid:
+        print('\nLeica base and Emlid rover newest year of data is similar: %s' % yy_base)
+    else:
+        print(colored('\nLeica base and Emlid rover do NOT have similar newest year of data. CHECK raw data!\n\n', 'red'))
+        print('Newest years: \nLeica base = %s\nEmlid rover = %s' % (yy_base, yy_emlid))
+
+    # check if newest day of year (doy) is similar for all receiver's data
+    if end_doy_base == end_doy:
+        print('\nLeica base and rover newest doy of data is similar: %s' % end_doy_base)
+    else:
+        print(colored('\nLeica base and rover do NOT have similar newest doy of data. CHECK raw data!', 'red'))
+        print('Newest doys: \nLeica base = %s\nLeica rover = %s' % (end_doy_base, end_doy))
+
+    if end_doy_base == end_doy_emlid:
+        print('\nLeica base and Emlid rover newest doy of data is similar: %s' % end_doy_base)
+    else:
+        print(colored('\nLeica base and Emlid rover do NOT have similar newest doy of data. CHECK raw data!', 'red'))
+        print('Newest doys: \nLeica base = %s\nEmlid rover = %s' % (end_doy_base, end_doy_emlid))
+
+    return yy_base, int(start_doy_base), int(end_doy_base), yy, int(start_doy), int(end_doy), yy_emlid, int(start_doy_emlid), int(end_doy_emlid)
 
 
 """ Define RTKLIB functions """
@@ -540,7 +633,7 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_lengt
     # Q read all .ENU files in solution directory, parse date and time columns to datetimeindex and add them to the dataframe
     print(colored('\n\nstart reading all ENU solution files from receiver: %s' % rover_name, 'blue'))
     for file in glob.iglob(dest_path + 'sol/' + rover_name + '/' + resolution + '/*' + ending + '.pos', recursive=True):
-        print('\nreading ENU file: %s' % file)
+        print('reading ENU file: %s' % file)
         enu = pd.read_csv(file, header=header_length, delimiter=' ', skipinitialspace=True, index_col=['date_time'],
                           na_values=["NaN"],
                           usecols=[0, 1, 4, 5, 6, 9], names=['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'],
@@ -728,20 +821,20 @@ def read_pole_observations(dest_path, ipol_density=None):
     return poles
 
 
-def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_laser.pkl'):
+def read_laser_observations(dest_path, ipol, laser_pickle='06_SHM/Laser/nm_laser.pkl'):
     """ read snow accumulation observations (minute resolution) from laser distance sensor data
     :param ipol: interpolated density data from manual reference observations
-    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., 'shm/nm_shm.pkl') creating/containing snow accumulation observations from laser distance sensor
+    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '06_SHM/Laser/nm_shm.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :return: df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std
     """
     # Q: read snow accumulation observations (minute resolution) from laser distance sensor data
     if laser_pickle is None:
-        print(colored('\nlaser observations are NOT available as pickle, reading all logfiles: shm/nm*.log', 'yellow'))
+        print(colored('\nlaser observations are NOT available as pickle, reading all logfiles: 06_SHM/Laser/nm*.log', 'yellow'))
         # create empty dataframe for all .log files
         laser = pd.DataFrame()
         # read all snow accumulation.log files in folder, parse date and time columns to datetimeindex and add them to the dataframe
-        for file in glob.iglob(dest_path + 'shm/nm*.log', recursive=True):
+        for file in glob.iglob(dest_path + '06_SHM/Laser/nm*.log', recursive=True):
             print(file)
             # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
             shm = pd.read_csv(file, header=0, delimiter=r'[ >]', skipinitialspace=True, na_values=["NaN"], names=['date', 'time', 'none','sh', 'signal', 'temp', 'error', 'check'], usecols=[0,1,3,5,6],
@@ -752,7 +845,7 @@ def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_laser.pkl'):
         laser['dsh'] = (laser['sh'] - laser['sh'][0]) * 1000
 
         # store as .pkl
-        laser.to_pickle(dest_path + 'shm/nm_laser.pkl')
+        laser.to_pickle(dest_path + '06_SHM/Laser/nm_laser.pkl')
 
     else:
         print(colored('\nlaser observations are available as pickle, reading: %s' % laser_pickle, 'yellow'))
@@ -793,13 +886,13 @@ def read_laser_observations(dest_path, ipol, laser_pickle='shm/nm_laser.pkl'):
     return laser, laser_filtered
 
 
-def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='shm/nm_laser.pkl'):
+def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='06_SHM/Laser/nm_laser.pkl'):
     """ read reference sensor's observations from manual observations, a snow buoy sensor, a laser distance sensor and manual pole observations
     :param read_laser: read laser accumulation data (True) or not (False)
     :param read_poles: read poles accumulation data (True) or not (False)
     :param read_buoy: read buoy accumulation data (True) or not (False)
     :param read_manual: read manual observation data (True) or not (False)
-    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., 'shm/nm_laser.pkl') creating/containing snow accumulation observations from laser distance sensor
+    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '06_SHM/Laser/nm_laser.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :return: manual, ipol, buoy, poles, laser, laser_filtered
     """
@@ -1082,7 +1175,7 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
     n_manual = len(diffs_swe_daily.dswe_manual.dropna())
     print('\nNumber of samples (manual vs. GNSS, daily), Leica: %.0f' % n_manual)
     n_manual_emlid = len(diffs_swe_daily.dswe_manual_emlid.dropna())
-    print('\nNumber of samples (manual vs. GNSS, daily), Emlid: %.0f' % n_manual_emlid)
+    print('Number of samples (manual vs. GNSS, daily), Emlid: %.0f' % n_manual_emlid)
     n_laser = len(diffs_swe_15min.dswe_laser)
     print('Number of samples (laser vs. GNSS, 15min): %.0f' % n_laser)
     n_laser_emlid = len(diffs_swe_15min.dswe_laser_emlid)
@@ -1116,7 +1209,7 @@ def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, Tr
     plt.legend(
         ['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)',
          'Manual', 'Density (kg/m3)'], fontsize=11, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1152,7 +1245,7 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.xlabel(None)
     plt.ylabel('SWE (mm w.e.)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1181,7 +1274,7 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
     plt.xlabel(None)
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1257,7 +1350,7 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.xlabel(None)
     plt.ylabel('Snow accumulation (mm)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1286,7 +1379,7 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
     plt.xlabel(None)
     plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1320,7 +1413,7 @@ def plot_PPP_solution(dest_path, save=[False, True]):
     axes[1].set_ylabel('ΔLon (cm)', fontsize=14)
     axes[2].set_ylabel('ΔH (cm)', fontsize=14)
     plt.xlabel(None)
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 9, 1))
+    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
     if save is True:
         plt.savefig('plots/LLH_base.png', bbox_inches='tight')
         plt.savefig('plots/LLH_base.pdf', bbox_inches='tight')

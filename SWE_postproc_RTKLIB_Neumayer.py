@@ -22,45 +22,47 @@ import os
 import functions as f
 import matplotlib.pyplot as plt
 
-# CHOOSE: DEFINE year, files (base, rover, navigation orbits, precise orbits), time interval
-scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'  # data source path at AWI server (data copied from Antarctica via O2A)
-dst_path = 'C:/Users/sladina.BGEO02P102/Documents/SD_Card/Postdoc/AWI/05_Analysis/Run_RTKLib/data_neumayer/'
-rover = 'ReachM2_sladina-raw_'  # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
-rover_name = 'NMER_original'  # 'NMER' or 'NMER_original' or 'NMLR'
-receiver = 'NMER'  # 'NMER' or 'NMLB' or 'NMLR'
-base = '3387'
-nav = '3387'
-sp3 = 'COD'
-ti_int = '900'
-resolution = '15min'
-options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer_900_15'
-options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neumayer_900_15'
-ending = ''  # e.g. a variant of the processing '_eleambmask15', '_noglonass'
-yy = str(22)
-start_doy = 0
-end_doy = 5
+# CHOOSE: DEFINE data paths, file names (base, rover, navigation orbits, precise orbits, config), time interval !!!
+scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'                                        # data source path at AWI server (data copied from Antarctica via O2A)
+dst_path = 'C:/Users/sladina.BGEO02P102/Documents/SD_Card/Postdoc/AWI/05_Analysis/Run_RTKLib/data_neumayer/'    # data destination path for processing
+rover = 'ReachM2_sladina-raw_'                                                                  # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
+rover_name = 'NMER_original'                                                                    # 'NMER' or 'NMER_original' or 'NMLR'
+receiver = 'NMER'                                                                               # 'NMER' or 'NMLB' or 'NMLR'
+base = '3387'                                                                                   # rinex file name prefix for base receiver
+nav = '3387'                                                                                    # navigation file name prefix for broadcast ephemerides files
+sp3 = 'COD'                                                                                     # navigation file name prefix for precise ephemerides files
+ti_int = '900'                                                                                  # processing time interval (seconds)
+resolution = '15min'                                                                            # processing resolution (minutes)
+options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for high-end receiver
+options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for low-cost receiver
+ending = ''                                                                                     # file name suffix if needed: e.g., a variant of the processing '_eleambmask15', '_noglonass'
+# yy = str(22)                                                                                  # year to process
+# start_doy = 0                                                                                 # start day of year (doy) to process
+# end_doy = 5                                                                                   # end day of year (doy) to process
 
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
-year_max_emlid, doy_max_emlid, doy_file_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
+yy_emlid, start_doy_emlid, end_doy_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
-year_max, doy_max, doy_file = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
+yy, start_doy, end_doy = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
-year_max_base, doy_max_base, doy_file_base = f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
+yy_base, start_doy_base, end_doy_base = f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
+
+# check available and new data to pass newest year, doys for further processing
+yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid = f.check_data_doys(dst_path, yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid, resolution)
 
 
 """ 1. run RTKLib automatically (instead of RTKPost Gui manually) """
-# TODO: tell from file check in step0, year_max and start_doy=doy_max and end_doy=doy_file
 # process data using RTKLIB post processing command line tool 'rnx2rtkp' for a specific year and a range of day of years (doys)
-f.automate_rtklib_pp(dst_path, 'NMER', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy,
+f.automate_rtklib_pp(dst_path, 'NMER', yy_emlid, ti_int, base, nav, sp3, resolution, ending, start_doy_emlid, end_doy_emlid,
                               'NMER', options_Emlid)
 f.automate_rtklib_pp(dst_path, '3393', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy,
                               'NMLR', options_Leica)
 
 
-""" 2. Get RTKLib ENU solution files """
+''' 2. Get RTKLib ENU solution files '''
 # read all RTKLib ENU solution files (daily) and store them in one dataframe for whole season
 df_enu_emlid = f.get_rtklib_solutions(dst_path, 'NMER', resolution, ending, header_length=26)
 df_enu_leica = f.get_rtklib_solutions(dst_path, 'NMLR', resolution, ending, header_length=27)
@@ -77,9 +79,9 @@ df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_l
     resample=False, resample_resolution='30min', ending=ending)
 
 
-''' 4. Read reference sensors data '''
+""" 4. Read reference sensors data """
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
-    dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='shm/nm_laser.pkl')
+    dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='06_SHM/Laser/nm_laser.pkl')
 
 
 ''' 5. Convert swe to snow accumulation and add to df '''
