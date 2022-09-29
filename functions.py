@@ -76,6 +76,9 @@ def check_existing_files(dest_path, rover):
     print('parent dir: ', parent_dir)
 
     # get newest year of files in processing folder
+    # todo: check maybe easier way:
+    # check newest laser file in local laser data directory
+    # existing_file_date = os.path.basename(sorted(glob.iglob(dest_path + '06_SHM/Laser/nm' + yy + '*.log', recursive=True), reverse=True)[0]).split('.')[0][2:]
     years = ['0']
     for f in glob.iglob(parent_dir + '/' + rover + '???0.*O'):
         # extract doy from filename
@@ -821,13 +824,25 @@ def read_pole_observations(dest_path, ipol_density=None):
     return poles
 
 
-def read_laser_observations(dest_path, ipol, laser_pickle='06_SHM/Laser/nm_laser.pkl'):
+def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='06_SHM/Laser/nm_laser.pkl'):
     """ read snow accumulation observations (minute resolution) from laser distance sensor data
     :param ipol: interpolated density data from manual reference observations
     :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '06_SHM/Laser/nm_shm.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :return: df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std
     """
+    # Q: copy laser observations from AWI server if not already existing
+    print(colored("\ncopy new laser files", 'blue'))
+    for f in glob.glob(laser_path + '20' + yy + '/*.log'):
+        file = os.path.basename(f)
+        if not os.path.exists(dest_path + '06_SHM/Laser/' + file):
+            shutil.copy2(f, dest_path + '06_SHM/Laser/')
+            print("file copied from %s to %s" % (f, dest_path + '06_SHM/Laser/'))
+        else:
+            # print(colored("\nfile in destination already exists: %s, \ncopy aborted!!!" % dest_path, 'yellow'))
+            continue
+    print(colored("\nnew laser files copied", 'blue'))
+
     # Q: read snow accumulation observations (minute resolution) from laser distance sensor data
     if laser_pickle is None:
         print(colored('\nlaser observations are NOT available as pickle, reading all logfiles: 06_SHM/Laser/nm*.log', 'yellow'))
@@ -886,7 +901,7 @@ def read_laser_observations(dest_path, ipol, laser_pickle='06_SHM/Laser/nm_laser
     return laser, laser_filtered
 
 
-def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='06_SHM/Laser/nm_laser.pkl'):
+def read_reference_data(dest_path, laser_path, yy, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='06_SHM/Laser/nm_laser.pkl'):
     """ read reference sensor's observations from manual observations, a snow buoy sensor, a laser distance sensor and manual pole observations
     :param read_laser: read laser accumulation data (True) or not (False)
     :param read_poles: read poles accumulation data (True) or not (False)
@@ -919,7 +934,7 @@ def read_reference_data(dest_path, read_manual=[True, False], read_buoy=[True, F
 
     # Q: read snow depth observations (minute resolution) from laser distance sensor data
     if read_laser is True:
-        laser, laser_filtered = read_laser_observations(dest_path, ipol, laser_pickle)
+        laser, laser_filtered = read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle)
     else:
         laser, laser_filtered = None, None
 
@@ -1122,7 +1137,7 @@ def calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid
     joined = pd.concat([manual.SWE_aboveAnt, emlid_daily.dswe], axis=1).dropna()
     fit_emlid_daily = np.polyfit(joined.SWE_aboveAnt, joined.dswe, 1)
     predict_emlid_daily = np.poly1d(fit_emlid_daily)
-    print('Linear fit (manual vs. GNSS, daily), Emlid: \m = ', round(fit_emlid_daily[0], 2), ', b = ', int(fit_emlid_daily[1]))
+    print('Linear fit (manual vs. GNSS, daily), Emlid: m = ', round(fit_emlid_daily[0], 2), ', b = ', int(fit_emlid_daily[1]))
 
     # fit linear regression curve laser vs. GNSS (15min), Leica
     joined = pd.concat([laser_15min.dswe, gnss_leica.dswe], axis=1).dropna()

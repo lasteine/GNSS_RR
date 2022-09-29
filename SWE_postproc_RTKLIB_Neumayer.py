@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 # CHOOSE: DEFINE data paths, file names (base, rover, navigation orbits, precise orbits, config), time interval !!!
 scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'                                        # data source path at AWI server (data copied from Antarctica via O2A)
 dst_path = 'C:/Users/sladina.BGEO02P102/Documents/SD_Card/Postdoc/AWI/05_Analysis/Run_RTKLib/data_neumayer/'    # data destination path for processing
+laser_path = '//smb.isibhv.dmawi.de/projects/mob/Neumayer/data/Rohdaten/shm/'                   # data source path at AWI server for snow accumulation laser sensor from AWI MetObs
 rover = 'ReachM2_sladina-raw_'                                                                  # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
 rover_name = 'NMER_original'                                                                    # 'NMER' or 'NMER_original' or 'NMLR'
 receiver = 'NMER'                                                                               # 'NMER' or 'NMLB' or 'NMLR'
@@ -81,7 +82,7 @@ df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_l
 
 """ 4. Read reference sensors data """
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
-    dst_path, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='06_SHM/Laser/nm_laser.pkl')
+    dst_path, laser_path, yy, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle=None)
 
 
 ''' 5. Convert swe to snow accumulation and add to df '''
