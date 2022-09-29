@@ -13,7 +13,7 @@ output: - position (.pos) file; (UTC, E, N, U)
         - plots (SWE timeseries, DeltaSWE timeseries, scatter plots)
 
 created by: L. Steiner (Orchid ID: 0000-0002-4958-0849)
-created on: 8.8.2022
+created on: 17.05.2022
 updated on: 29.09.2022
 """
 

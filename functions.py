@@ -1,6 +1,6 @@
 """ Functions to generate daily rinex 3.0x files from day-overlapping Emlid rinex files;
     Necessary preprocessing for daily file processing with RTKLib
-    created by: L. Steiner
+    created by: L. Steiner (Orchid ID: 0000-0002-4958-0849)
     created on: 17.05.2021
     updated on: 29.09.2021
 """
@@ -12,7 +12,6 @@ import datetime
 import shutil
 import lzma
 import tarfile
-import time
 import gnsscal
 import datetime as dt
 import pandas as pd
