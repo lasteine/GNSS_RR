@@ -40,7 +40,8 @@ ending = ''                                                                     
 # yy = str(22)                                                                                  # year to process
 # start_doy = 0                                                                                 # start day of year (doy) to process
 # end_doy = 5                                                                                   # end day of year (doy) to process
-
+use_laser_pickle = '06_SHM/Laser/nm_laser.pkl'                                                  # read laser log files (None) or use already stored pickle file '06_SHM/Laser/nm_laser.pkl'
+save_plots = True                                                                              # show (False) or save (True) plots
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
@@ -82,7 +83,7 @@ df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_l
 
 """ 4. Read reference sensors data """
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
-    dst_path, laser_path, yy, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle=None)
+    dst_path, laser_path, yy, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle=use_laser_pickle)
 
 
 ''' 5. Convert swe to snow accumulation and add to df '''
@@ -113,36 +114,36 @@ os.makedirs(dst_path + 'plots/', exist_ok=True)
 
 # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
 f.plot_all_SWE(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min, buoy_daily, poles_daily,
-               save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
+               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
 
 # plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
 f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
-                   save=False, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 # plot boxplot of differences (Emlid, manual, laser compared to Leica)
-f.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=False)
+f.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=save_plots)
 
 # plot scatter plot (GNSS vs. manual/laser, daily/15min)
 f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt, predict_daily, predict_emlid_daily,
-               x_label='Manual', save=False)
+               x_label='Manual', save=save_plots)
 
 f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe, predict_15min, predict_15min_emlid,
-               x_label='Laser', save=False)
+               x_label='Laser', save=save_plots)
 
 
 # plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
 f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
-               save=False, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 
 # plot Difference in Accumulation (compared to Leica)
 f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
-                   save=False, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
 
 
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
 f.plot_SWE_density_acc(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
-                       save=False, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
+                       save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
 
 
 ## plot PPP position solutions

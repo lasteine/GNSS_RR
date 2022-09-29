@@ -17,6 +17,8 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
+from matplotlib.ticker import NullFormatter
 from termcolor import colored
 
 
@@ -636,7 +638,7 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_lengt
     # Q read all .ENU files in solution directory, parse date and time columns to datetimeindex and add them to the dataframe
     print(colored('\n\nstart reading all ENU solution files from receiver: %s' % rover_name, 'blue'))
     for file in glob.iglob(dest_path + 'sol/' + rover_name + '/' + resolution + '/*' + ending + '.pos', recursive=True):
-        print('reading ENU file: %s' % file)
+        print('reading ENU solution file: %s' % file)
         enu = pd.read_csv(file, header=header_length, delimiter=' ', skipinitialspace=True, index_col=['date_time'],
                           na_values=["NaN"],
                           usecols=[0, 1, 4, 5, 6, 9], names=['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'],
@@ -1225,6 +1227,8 @@ def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, Tr
         ['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)',
          'Manual', 'Density (kg/m3)'], fontsize=11, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1261,6 +1265,8 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.ylabel('SWE (mm w.e.)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1290,6 +1296,8 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1301,7 +1309,7 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
 
 def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predict_emlid_daily=None, x_label='Manual', save=[False, True]):
     plt.close()
-    plt.figure(figsize=(3.5, 4.5))
+    plt.figure(figsize=(4.5, 4.5))
     leica_x = pd.concat([y_leica, x_value], axis=1)
     leica_x.columns = ['dswe_y', 'dswe_x']
     emlid_x = pd.concat([y_emlid, x_value], axis=1)
@@ -1312,13 +1320,13 @@ def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predi
         plt.plot(range(50, 550), predict_daily(range(50, 550)), c='k', linestyle='--', alpha=0.7)  # linear regression leica
     if predict_emlid_daily is not None:
         plt.plot(range(50, 550), predict_emlid_daily(range(50, 550)), c='salmon', linestyle='-.', alpha=0.7)  # linear regression emlid
-    ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=12)
+    ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=14)
     ax.set_ylim(-100, 600)
     ax.set_xlim(-100, 600)
-    ax.set_xlabel(x_label + ' SWE (mm w.e.)', fontsize=12)
+    ax.set_xlabel(x_label + ' SWE (mm w.e.)', fontsize=14)
     plt.legend(['High-end GNSS', 'Low-cost GNSS'], fontsize=12, loc='upper left')
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
     plt.grid()
     if save is True:
         plt.savefig(data_path + '/plots/scatter_SWE_' + x_label + '.png', bbox_inches='tight')
@@ -1349,7 +1357,7 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.close()
     plt.figure()
     if leica is not None:
-        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400)).grid()
+        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400), x_compat=True).grid()
     if emlid is not None:
         emlid.dsh.plot(color='salmon', linestyle='--')
     if manual is not None:
@@ -1366,6 +1374,8 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.ylabel('Snow accumulation (mm)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
@@ -1395,6 +1405,8 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
     plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
