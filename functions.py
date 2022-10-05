@@ -72,36 +72,19 @@ def check_existing_files(dest_path, rover):
     :param rover: rover file name prefix
     :return: doy_max: maximum doy in existing files, newer doys should be copied
     """
-    # Q: get list of yydoys in processing folder for receiver
     # get parent directory
     parent_dir = os.path.dirname(os.path.dirname(dest_path))
     print('parent dir: ', parent_dir)
 
+    # get file names
+    files = sorted(glob.iglob(parent_dir + '/' + rover + '???0.*O', recursive=True), reverse=True)
     # get newest year of files in processing folder
-    # todo: check maybe easier way:
-    # check newest laser file in local laser data directory
-    # existing_file_date = os.path.basename(sorted(glob.iglob(dest_path + '06_SHM/Laser/nm' + yy + '*.log', recursive=True), reverse=True)[0]).split('.')[0][2:]
-    years = ['0']
-    for f in glob.iglob(parent_dir + '/' + rover + '???0.*O'):
-        # extract doy from filename
-        year = os.path.basename(f).split('.')[1][:2]
-        # add doy to series of doys
-        years.append(year)
-
-    # get newest doy and return
-    year_max = max(years)
+    year_max = max([os.path.basename(f).split('.')[1][:2] for f in files])
     print(colored('newest year in existing files of parent dir: %s' % year_max, 'blue'))
 
     # get newest doy of files in processing folder
-    doys = ['0']
-    for f in glob.iglob(parent_dir + '/' + rover + '???0.' + year_max + 'O'):
-        # extract doy from filename
-        doy = os.path.basename(f).split('.')[0][4:7]
-        # add doy to series of doys
-        doys.append(doy)
-
-    # get newest doy and return
-    doy_max = max(doys)
+    doy_max = os.path.basename(sorted(glob.iglob(parent_dir + '/' + rover + '???0.' + year_max + 'O', recursive=True),
+                                      reverse=True)[0]).split('.')[0][4:7]
     print(colored('newest doy in existing files of parent dir: %s' % doy_max, 'blue'))
 
     return year_max, doy_max
@@ -126,6 +109,26 @@ def copy_file_no_overwrite(source_path, dest_path, file_name):
     else:
         print("\nfile in destination already exists: %s, \ncopy aborted!!!" % dest_path_file)
     pass
+
+
+def copy_solplotsdirs(source_path, dest_path):
+    """ copy entire solution and plot directories
+    :param source_path: local directory containing the solution and plot files
+    :param dest_path: remote directory used for backup
+    """
+    shutil.copytree(source_path + '20_solutions/', dest_path + '20_solutions/', dirs_exist_ok=True)
+    print('\ncopy directory: ' + source_path + '20_solutions/\nto: ' + dest_path + '20_solutions/')
+    shutil.copytree(source_path + '30_plots/', dest_path + '30_plots/', dirs_exist_ok=True)
+    print('copy directory: ' + source_path + '30_plots/\nto: ' + dest_path + '30_plots/')
+
+
+def copy4backup(source_path, dest_path):
+    """ copy entire processing directory to server
+    :param source_path: local processing directory containing
+    :param dest_path: remote directory used for backup
+    """
+    shutil.copytree(source_path, dest_path, dirs_exist_ok=True)
+    print('\ncopy directory: ' + source_path + '\nto: ' + dest_path)
 
 
 def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], copy=[True, False], parent=[True, False], hatanaka=[True, False], move=[True, False], delete_temp=[True, False]):
@@ -180,7 +183,7 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                     print('file decompressed: %s' % dest_file)
                 else:
                     # print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
-                    doy_file = None
+                    # doy_file = None
                     pass
             if doy_file is None:
                 print(colored('no new files available in source folder', 'green'))
@@ -225,10 +228,10 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                         tar.fileobj.close()
                 else:
                     # print(colored('file already preprocessed and available in the processing folder, skip file: %s' % f, 'yellow'))
-                    doy_file = None
+                    # doy_file = None
                     pass
             if doy_file is None:
-                print(colored('no new files available in source folder: %s', 'green'))
+                print(colored('no new files available in source folder:', 'green'))
 
         else:
             pass
@@ -478,7 +481,7 @@ def check_data_doys(dest_path, yy_base, start_doy_base, end_doy_base, yy, start_
         end_doy = start_doy
         doys = ['0']
         # extract last processed doy from solution (.POS) files
-        for f in glob.iglob(dest_path + 'sol/NMLR/' + resolution + '/20' + yy + '*.POS', recursive=True):
+        for f in glob.iglob(dest_path + '20_solutions/NMLR/' + resolution + '/20' + yy + '*.POS', recursive=True):
             sol_file = os.path.basename(f)
             # extract doy from filename
             doy = sol_file.split('.')[0][-3:]
@@ -491,7 +494,7 @@ def check_data_doys(dest_path, yy_base, start_doy_base, end_doy_base, yy, start_
         end_doy_emlid = start_doy_emlid
         doys = ['0']
         # extract last processed doy from solution (.POS) files
-        for f in glob.iglob(dest_path + 'sol/NMER/' + resolution + '/20' + yy + '*.POS', recursive=True):
+        for f in glob.iglob(dest_path + '20_solutions/NMER/' + resolution + '/20' + yy + '*.POS', recursive=True):
             sol_file = os.path.basename(f)
             # extract doy from filename
             doy = sol_file.split('.')[0][-3:]
@@ -583,10 +586,10 @@ def automate_rtklib_pp(dest_path, rover_prefix, yy, ti_int, base_prefix, brdc_na
             broadcast_orbit_glonass = brdc_nav_prefix + doy + '0.' + yy + 'g'
             broadcast_orbit_galileo = brdc_nav_prefix + doy + '0.' + yy + 'l'
             precise_orbit = precise_nav_prefix + str(gpsweek) + str(dow) + '.EPH_M'
-            output_file = 'sol/' + rover_name + '/' + resolution + '/20' + yy + '_' + rover_name + doy + ending + '.pos'
+            output_file = '20_solutions/' + rover_name + '/' + resolution + '/20' + yy + '_' + rover_name + doy + ending + '.pos'
 
             # create a solution directory if not existing
-            os.makedirs(dest_path + 'sol/' + rover_name + '/' + resolution + '/', exist_ok=True)
+            os.makedirs(dest_path + '20_solutions/' + rover_name + '/' + resolution + '/', exist_ok=True)
 
             # Q: change directory to data directory & run RTKLib post processing command
             run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file,
@@ -597,7 +600,7 @@ def automate_rtklib_pp(dest_path, rover_prefix, yy, ti_int, base_prefix, brdc_na
 
 def run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file, brdc_orbit_gps, brdc_orbit_glonass, brdc_orbit_galileo, precise_orbit):
     """ run RTKLib post processing command (rnx2rtkp) as a subprocess (instead of manual RTKPost GUI)
-        example: 'rnx2rtkp -k rtkpost_options.conf -ti 900 -o sol/NMLR/15min/NMLRdoy.pos NMLR0040.17O NMLB0040.17O NMLB0040.17n NMLB0040.17g NMLB0040.17e COD17004.eph'
+        example: 'rnx2rtkp -k rtkpost_options.conf -ti 900 -o 20_solutions/NMLR/15min/NMLRdoy.pos NMLR0040.17O NMLB0040.17O NMLB0040.17n NMLB0040.17g NMLB0040.17e COD17004.eph'
         :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file (all data needs to be in one folder)
         :param options: rtkpost configuration file
         :param ti_int: processing time interval (in seconds)
@@ -637,7 +640,7 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_lengt
 
     # Q read all .ENU files in solution directory, parse date and time columns to datetimeindex and add them to the dataframe
     print(colored('\n\nstart reading all ENU solution files from receiver: %s' % rover_name, 'blue'))
-    for file in glob.iglob(dest_path + 'sol/' + rover_name + '/' + resolution + '/*' + ending + '.pos', recursive=True):
+    for file in glob.iglob(dest_path + '20_solutions/' + rover_name + '/' + resolution + '/*' + ending + '.pos', recursive=True):
         print('reading ENU solution file: %s' % file)
         enu = pd.read_csv(file, header=header_length, delimiter=' ', skipinitialspace=True, index_col=['date_time'],
                           na_values=["NaN"],
@@ -646,11 +649,11 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_lengt
         df_enu = pd.concat([df_enu, enu], axis=0)
 
     # store dataframe as binary pickle format
-    df_enu.to_pickle(dest_path + 'sol/' + rover_name + '_' + resolution + ending + '.pkl')
+    df_enu.to_pickle(dest_path + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl')
 
     print(colored('\nstored all ENU solution data in dataframe df_enu:', 'blue'))
     print(df_enu)
-    print(colored('\nstored all ENU solution data in pickle: ' + 'sol/' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
+    print(colored('\nstored all ENU solution data in pickle: ' + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
 
     return df_enu
 
@@ -672,8 +675,8 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambi
     """
     # Q: read all data from .pkl if no df_enu is provided
     if df_enu is None:
-        print(colored('\nENU solution dataframe is NOT available, reading from pickle: %s' % 'sol/' + rover_name + '_' + resolution + ending + '.pkl', 'yellow'))
-        df_enu = pd.read_pickle(dest_path + 'sol/' + rover_name + '_' + resolution + ending + '.pkl')
+        print(colored('\nENU solution dataframe is NOT available, reading from pickle: %s' % '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl', 'yellow'))
+        df_enu = pd.read_pickle(dest_path + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl')
 
     print(colored('\nENU solution dataframe is available, start filtering data', 'blue'))
 
@@ -722,10 +725,10 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambi
     std_gnss_daily = swe_gnss.resample('D').std()
 
     # Q: store swe results to pickle
-    print(colored('\ndata is filtered, cleaned, and corrected and SWE results are stored to pickle and .csv: %s' % 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
-    os.makedirs(dest_path + 'sol/SWE_results/', exist_ok=True)
-    swe_gnss.to_pickle(dest_path + 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
-    swe_gnss.to_csv(dest_path + 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.csv')
+    print(colored('\ndata is filtered, cleaned, and corrected and SWE results are stored to pickle and .csv: %s' % '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
+    os.makedirs(dest_path + '20_solutions/SWE_results/', exist_ok=True)
+    swe_gnss.to_pickle(dest_path + '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
+    swe_gnss.to_csv(dest_path + '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.csv')
 
     return df_enu, fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
 
@@ -733,8 +736,8 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambi
 def read_swe_gnss(dest_path, swe_gnss, rover_name, resolution, ending):
     # read gnss swe results from pickle
     if swe_gnss is None:
-        print(colored('\nSWE results are NOT available, reading from pickle: %s' % 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl', 'orange'))
-        swe_gnss = pd.read_pickle(dest_path + 'sol/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
+        print(colored('\nSWE results are NOT available, reading from pickle: %s' % '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl', 'orange'))
+        swe_gnss = pd.read_pickle(dest_path + '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
 
     return swe_gnss
 
@@ -749,7 +752,7 @@ def read_manual_observations(dest_path):
     """
     # read data
     print('\nread manual observations')
-    manual = pd.read_csv(dest_path + '03_Densitypits/Manual_Spuso.csv', header=1, skipinitialspace=True,
+    manual = pd.read_csv(dest_path + '00_reference_data/Manual_Spuso.csv', header=1, skipinitialspace=True,
                          delimiter=';', index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True,
                          names=['Acc', 'Density', 'SWE', 'Density_aboveAnt', 'SWE_aboveAnt'])
     manual2 = manual
@@ -773,7 +776,7 @@ def read_snowbuoy_observations(dest_path, ipol_density=None):
     """
     # Q: read snow buoy data
     print('\nread snow buoy observations')
-    buoy_all = pd.read_csv(dest_path + '06_SHM/Snowbuoy/2017S54_300234011695900_proc.csv', header=0,
+    buoy_all = pd.read_csv(dest_path + '00_reference_data/Snowbuoy/2017S54_300234011695900_proc.csv', header=0,
                            skipinitialspace=True, delimiter=',', index_col=0, skiprows=0, na_values=["NaN"],
                            parse_dates=[0],
                            names=['lat', 'lon', 'sh1', 'sh2', 'sh3', 'sh4', 'pressure', 'airtemp', 'bodytemp',
@@ -809,7 +812,7 @@ def read_pole_observations(dest_path, ipol_density=None):
     """
     # Q: read Pegelfeld Spuso pole observations
     print('\nread Pegelfeld Spuso pole observations')
-    poles = pd.read_csv(dest_path + '03_Densitypits/Pegelfeld_Spuso_Akkumulation.csv', header=0, delimiter=';',
+    poles = pd.read_csv(dest_path + '00_reference_data/Pegelfeld_Spuso_Akkumulation.csv', header=0, delimiter=';',
                         index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True)
 
     # Q: convert snow accumulation to SWE (with interpolated and constant density values)
@@ -826,10 +829,10 @@ def read_pole_observations(dest_path, ipol_density=None):
     return poles
 
 
-def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='06_SHM/Laser/nm_laser.pkl'):
+def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='00_reference_data/Laser/nm_laser.pkl'):
     """ read snow accumulation observations (minute resolution) from laser distance sensor data
     :param ipol: interpolated density data from manual reference observations
-    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '06_SHM/Laser/nm_shm.pkl') creating/containing snow accumulation observations from laser distance sensor
+    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '00_reference_data/Laser/nm_shm.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :return: df_shm, h, fil_h_clean, h_resampled, h_std_resampled, sh, sh_std
     """
@@ -837,9 +840,9 @@ def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='06_SH
     print(colored("\ncopy new laser files", 'blue'))
     for f in glob.glob(laser_path + '20' + yy + '/*.log'):
         file = os.path.basename(f)
-        if not os.path.exists(dest_path + '06_SHM/Laser/' + file):
-            shutil.copy2(f, dest_path + '06_SHM/Laser/')
-            print("file copied from %s to %s" % (f, dest_path + '06_SHM/Laser/'))
+        if not os.path.exists(dest_path + '00_reference_data/Laser/' + file):
+            shutil.copy2(f, dest_path + '00_reference_data/Laser/')
+            print("file copied from %s to %s" % (f, dest_path + '00_reference_data/Laser/'))
         else:
             # print(colored("\nfile in destination already exists: %s, \ncopy aborted!!!" % dest_path, 'yellow'))
             continue
@@ -847,11 +850,11 @@ def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='06_SH
 
     # Q: read snow accumulation observations (minute resolution) from laser distance sensor data
     if laser_pickle is None:
-        print(colored('\nlaser observations are NOT available as pickle, reading all logfiles: 06_SHM/Laser/nm*.log', 'yellow'))
+        print(colored('\nlaser observations are NOT available as pickle, reading all logfiles: 00_reference_data/Laser/nm*.log', 'yellow'))
         # create empty dataframe for all .log files
         laser = pd.DataFrame()
         # read all snow accumulation.log files in folder, parse date and time columns to datetimeindex and add them to the dataframe
-        for file in glob.iglob(dest_path + '06_SHM/Laser/nm*.log', recursive=True):
+        for file in glob.iglob(dest_path + '00_reference_data/Laser/nm*.log', recursive=True):
             print(file)
             # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
             shm = pd.read_csv(file, header=0, delimiter=r'[ >]', skipinitialspace=True, na_values=["NaN"], names=['date', 'time', 'none','sh', 'signal', 'temp', 'error', 'check'], usecols=[0,1,3,5,6],
@@ -862,7 +865,7 @@ def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='06_SH
         laser['dsh'] = (laser['sh'] - laser['sh'][0]) * 1000
 
         # store as .pkl
-        laser.to_pickle(dest_path + '06_SHM/Laser/nm_laser.pkl')
+        laser.to_pickle(dest_path + '00_reference_data/Laser/nm_laser.pkl')
 
     else:
         print(colored('\nlaser observations are available as pickle, reading: %s' % laser_pickle, 'yellow'))
@@ -903,13 +906,13 @@ def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='06_SH
     return laser, laser_filtered
 
 
-def read_reference_data(dest_path, laser_path, yy, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='06_SHM/Laser/nm_laser.pkl'):
+def read_reference_data(dest_path, laser_path, yy, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='00_reference_data/Laser/nm_laser.pkl'):
     """ read reference sensor's observations from manual observations, a snow buoy sensor, a laser distance sensor and manual pole observations
     :param read_laser: read laser accumulation data (True) or not (False)
     :param read_poles: read poles accumulation data (True) or not (False)
     :param read_buoy: read buoy accumulation data (True) or not (False)
     :param read_manual: read manual observation data (True) or not (False)
-    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '06_SHM/Laser/nm_laser.pkl') creating/containing snow accumulation observations from laser distance sensor
+    :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '00_reference_data/Laser/nm_laser.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :return: manual, ipol, buoy, poles, laser, laser_filtered
     """
@@ -1202,9 +1205,10 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
 """ Define plot functions """
 
 
-def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, True], std_leica=None, std_emlid=None):
+def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, True], std_leica=None, std_emlid=None, suffix='', y_lim=(-200, 1400),
+                         x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     plt.figure()
-    leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400)).grid()
+    leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
     emlid.plot(color='salmon', linestyle='--')
     plt.errorbar(manual.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
     laser.dsh.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
@@ -1226,25 +1230,27 @@ def plot_SWE_density_acc(dest_path, leica, emlid, manual, laser, save=[False, Tr
     plt.legend(
         ['High-end GNSS', 'Low-cost GNSS', 'Accumulation_Laser (mm)', 'Accumulation_Manual (mm)', 'Laser (SHM)',
          'Manual', 'Density (kg/m3)'], fontsize=11, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.xlim(x_lim)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
-        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_15s_Leica_all_2021_22.png', bbox_inches='tight')
-        plt.savefig(dest_path + 'plots/SWE_Accts_NM_Emlid_15s_Leica_all_2021_22.pdf', bbox_inches='tight')
+        plt.savefig(dest_path + '30_plots/SWE_Accts_NM_Emlid_15s_Leica_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png', bbox_inches='tight')
+        plt.savefig(dest_path + '30_plots/SWE_Accts_NM_Emlid_15s_Leica_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=None, std_emlid=None):
+def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True],
+                 suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=None, std_emlid=None, y_lim=(-100, 600),
+                 x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
     plt.figure()
     if leica is not None:
-        leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-100, 600)).grid()
+        leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
     if emlid is not None:
         emlid.plot(color='salmon', linestyle='--')
     if manual is not None:
@@ -1264,24 +1270,25 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.xlabel(None)
     plt.ylabel('SWE (mm w.e.)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.xlim(x_lim)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
-        plt.savefig(data_path + '/plots/SWE_all_2021_22' + suffix + '.png', bbox_inches='tight')
-        plt.savefig(data_path + '/plots/SWE_all_2021_22' + suffix + '.pdf', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/SWE_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/SWE_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='',
+                     leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=(-200, 600), x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
     plt.figure()
-    diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-200, 600)).grid()
+    diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
     if manual is not None:
         diffs_swe.dswe_manual.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
         plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='k', linestyle='', capsize=4, alpha=0.5)
@@ -1295,19 +1302,19 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
     plt.xlabel(None)
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.xlim(x_lim)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
-        plt.savefig(data_path + '/plots/deltaSWE_all_2021_22' + suffix + '.png', bbox_inches='tight')
-        plt.savefig(data_path + '/plots/deltaSWE_all_2021_22' + suffix + '.pdf', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/deltaSWE_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/deltaSWE_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predict_emlid_daily=None, x_label='Manual', save=[False, True]):
+def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predict_emlid_daily=None, x_label='Manual', lim=(-100, 600), save=[False, True]):
     plt.close()
     plt.figure(figsize=(4.5, 4.5))
     leica_x = pd.concat([y_leica, x_value], axis=1)
@@ -1321,43 +1328,44 @@ def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predi
     if predict_emlid_daily is not None:
         plt.plot(range(50, 550), predict_emlid_daily(range(50, 550)), c='salmon', linestyle='-.', alpha=0.7)  # linear regression emlid
     ax.set_ylabel('GNSS SWE (mm w.e.)', fontsize=14)
-    ax.set_ylim(-100, 600)
-    ax.set_xlim(-100, 600)
+    ax.set_ylim(lim)
+    ax.set_xlim(lim)
     ax.set_xlabel(x_label + ' SWE (mm w.e.)', fontsize=14)
     plt.legend(['High-end GNSS', 'Low-cost GNSS'], fontsize=12, loc='upper left')
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     plt.grid()
     if save is True:
-        plt.savefig(data_path + '/plots/scatter_SWE_' + x_label + '.png', bbox_inches='tight')
-        plt.savefig(data_path + '/plots/scatter_SWE_' + x_label + '.pdf', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/scatter_SWE_' + x_label + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/scatter_SWE_' + x_label + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_swediff_boxplot(dest_path, diffs, save=[False, True]):
+def plot_swediff_boxplot(dest_path, diffs, y_lim=(-200, 600), save=[False, True]):
     """ Plot boxplot of differences of SWE from manual/laser/emlid data to Leica data
     """
     diffs.dswe_manual.describe()
     diffs.dswe_laser.describe()
     diffs.dswe_emlid.describe()
-    diffs[['dswe_manual', 'dswe_laser', 'dswe_emlid']].plot.box(ylim=(-200, 600), figsize=(3, 4.5), fontsize=12, rot=15)
+    diffs[['dswe_manual', 'dswe_laser', 'dswe_emlid']].plot.box(ylim=y_lim, figsize=(3, 4.5), fontsize=12, rot=15)
     plt.grid()
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=12)
     if save is True:
-        plt.savefig(dest_path + 'plots/box_diffSWE.png', bbox_inches='tight')
-        plt.savefig(dest_path + 'plots/box_diffSWE.pdf', bbox_inches='tight')
+        plt.savefig(dest_path + '30_plots/box_diffSWE.png', bbox_inches='tight')
+        plt.savefig(dest_path + '30_plots/box_diffSWE.pdf', bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None, save=[False, True],
+                 suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=(-200, 1400), x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Plot Accumulation (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
     plt.figure()
     if leica is not None:
-        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=(-200, 1400), x_compat=True).grid()
+        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=y_lim, x_compat=True).grid()
     if emlid is not None:
         emlid.dsh.plot(color='salmon', linestyle='--')
     if manual is not None:
@@ -1373,24 +1381,25 @@ def plot_all_Acc(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.xlabel(None)
     plt.ylabel('Snow accumulation (mm)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.xlim(x_lim)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
-        plt.savefig(data_path + '/plots/Acc_all_2021_22' + suffix + '.png', bbox_inches='tight')
-        plt.savefig(data_path + '/plots/Acc_all_2021_22' + suffix + '.pdf', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/Acc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/Acc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=None, buoy=None, poles=None, save=[False, True], suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)']):
+def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=None, buoy=None, poles=None, save=[False, True],
+                     suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=(-400, 1000), x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
     """
     plt.close()
     plt.figure()
-    diffs_sh_15min.dsh_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=(-400, 1000)).grid()
+    diffs_sh_15min.dsh_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
     if manual is not None:
         diffs_sh.dsh_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
         plt.errorbar(diffs_sh.dsh_manual.index, diffs_sh.dsh_manual, yerr=diffs_sh.dsh_manual / 10, color='darkblue', linestyle='', capsize=4, alpha=0.5)
@@ -1404,25 +1413,25 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
     plt.xlabel(None)
     plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.xlim(x_lim)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xticks(fontsize=14)
     plt.yticks(fontsize=14)
     if save is True:
-        plt.savefig(data_path + '/plots/deltaAcc_all_2021_22' + suffix + '.png', bbox_inches='tight')
-        plt.savefig(data_path + '/plots/deltaAcc_all_2021_22' + suffix + '.pdf', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/deltaAcc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/deltaAcc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 
 
-def plot_PPP_solution(dest_path, save=[False, True]):
+def plot_PPP_solution(dest_path, save=[False, True], suffix='', x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Read PPP solution and plot it
     """
     # create empty dataframe for all .log files
     df_ppp = pd.DataFrame()
     # read all PPP solution files in folder, parse date and time columns to datetimeindex and add them to the dataframe
-    for file in glob.iglob(dest_path + 'ppp/*.pos', recursive=True):
+    for file in glob.iglob(dest_path + '10_ppp/*.pos', recursive=True):
         print(file)
         # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
         ppp = pd.read_csv(file, header=7, delimiter=' ', skipinitialspace=True, na_values=["NaN"],
@@ -1440,10 +1449,10 @@ def plot_PPP_solution(dest_path, save=[False, True]):
     axes[1].set_ylabel('ΔLon (cm)', fontsize=14)
     axes[2].set_ylabel('ΔH (cm)', fontsize=14)
     plt.xlabel(None)
-    plt.xlim(dt.date(2021, 11, 26), dt.date(2022, 12, 1))
+    plt.xlim(x_lim)
     if save is True:
-        plt.savefig('plots/LLH_base.png', bbox_inches='tight')
-        plt.savefig('plots/LLH_base.pdf', bbox_inches='tight')
+        plt.savefig('30_plots/ppp_LLH_base_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png', bbox_inches='tight')
+        plt.savefig('30_plots/ppp_LLH_base_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 

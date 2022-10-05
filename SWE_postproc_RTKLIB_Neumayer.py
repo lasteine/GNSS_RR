@@ -14,13 +14,13 @@ output: - position (.pos) file; (UTC, E, N, U)
 
 created by: L. Steiner (Orchid ID: 0000-0002-4958-0849)
 created on: 17.05.2022
-updated on: 29.09.2022
+updated on: 05.10.2022
 """
 
 # IMPORT modules
 import os
 import functions as f
-import matplotlib.pyplot as plt
+import datetime as dt
 
 # CHOOSE: DEFINE data paths, file names (base, rover, navigation orbits, precise orbits, config), time interval !!!
 scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'                                        # data source path at AWI server (data copied from Antarctica via O2A)
@@ -40,8 +40,16 @@ ending = ''                                                                     
 # yy = str(22)                                                                                  # year to process
 # start_doy = 0                                                                                 # start day of year (doy) to process
 # end_doy = 5                                                                                   # end day of year (doy) to process
-use_laser_pickle = '06_SHM/Laser/nm_laser.pkl'                                                  # read laser log files (None) or use already stored pickle file '06_SHM/Laser/nm_laser.pkl'
-save_plots = True                                                                              # show (False) or save (True) plots
+use_laser_pickle = '00_reference_data/Laser/nm_laser.pkl'                                       # read laser log files (None) or use already stored pickle file '06_SHM/Laser/nm_laser.pkl'
+save_plots = True                                                                               # show (False) or save (True) plots
+acc_y_lim = (-200, 1400)                                                                        # y-axis limit for accumulation plots
+delta_acc_y_lim = (-400, 1000)                                                                  # y-axis limit for delta accumulation plots
+swe_y_lim = (-100, 600)                                                                         # y-axis limit for water equivalent plots
+delta_swe_y_lim = (-200, 600)                                                                   # y-axis limit for delta water equivalent plots
+xlim_dates = dt.date(2021, 11, 26), dt.date(2022, 12, 1)                                        # time series date limits to plot on x-axis
+
+# todo: replace .append to pd.concat (axis=0) in "f.filter_rtklib_solutions"
+# TODO: define classes (preprocess, process, plot) and adapt functions
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
@@ -110,44 +118,47 @@ f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
 
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
-os.makedirs(dst_path + 'plots/', exist_ok=True)
+os.makedirs(dst_path + '30_plots/', exist_ok=True)
 
 # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
 f.plot_all_SWE(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min, buoy_daily, poles_daily,
-               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
+               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), y_lim=swe_y_lim, x_lim=xlim_dates)
 
 # plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
 f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
-                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_swe_y_lim, x_lim=xlim_dates)
 
 # plot boxplot of differences (Emlid, manual, laser compared to Leica)
-f.plot_swediff_boxplot(dst_path, diffs_swe_daily, save=save_plots)
+f.plot_swediff_boxplot(dst_path, diffs_swe_daily, y_lim=delta_swe_y_lim, save=save_plots)
 
 # plot scatter plot (GNSS vs. manual/laser, daily/15min)
 f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt, predict_daily, predict_emlid_daily,
-               x_label='Manual', save=save_plots)
+               x_label='Manual', lim=swe_y_lim, save=save_plots)
 
 f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe, predict_15min, predict_15min_emlid,
-               x_label='Laser', save=save_plots)
+               x_label='Laser', lim=swe_y_lim, save=save_plots)
 
 
 # plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
 f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
-               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=acc_y_lim, x_lim=xlim_dates)
 
 
 # plot Difference in Accumulation (compared to Leica)
 f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
-                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'])
+                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_acc_y_lim, x_lim=xlim_dates)
 
 
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
 f.plot_SWE_density_acc(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
-                       save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna())
+                       save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), suffix='', y_lim=acc_y_lim, x_lim=xlim_dates)
 
 
 ## plot PPP position solutions
-# df_ppp = f.plot_PPP_solution(dst_path, save=False)
+# df_ppp = f.plot_PPP_solution(dst_path, save=False, suffix='', x_lim=xlim_dates)
 
+# copy solutions and plots directories back to server
+# f.copy_solplotsdirs(dst_path, scr_path + '../Processing/Run_RTKLib/data_neumayer/')
 
-# TODO: define classes (preprocess, process, plot) and adapt functions
+# copy entire processing directory back to server
+f.copy4backup(dst_path + '../', scr_path + '../Processing/Run_RTKLib/')
