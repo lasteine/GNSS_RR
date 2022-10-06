@@ -586,10 +586,11 @@ def automate_rtklib_pp(dest_path, rover_prefix, yy, ti_int, base_prefix, brdc_na
             broadcast_orbit_glonass = brdc_nav_prefix + doy + '0.' + yy + 'g'
             broadcast_orbit_galileo = brdc_nav_prefix + doy + '0.' + yy + 'l'
             precise_orbit = precise_nav_prefix + str(gpsweek) + str(dow) + '.EPH_M'
-            output_file = '20_solutions/' + rover_name + '/' + resolution + '/20' + yy + '_' + rover_name + doy + ending + '.pos'
 
             # create a solution directory if not existing
-            os.makedirs(dest_path + '20_solutions/' + rover_name + '/' + resolution + '/', exist_ok=True)
+            sol_dir = '20_solutions/' + rover_name + '/' + resolution + '/temp_' + rover_name + '/'
+            os.makedirs(dest_path + sol_dir, exist_ok=True)
+            output_file = sol_dir + '20' + yy + '_' + rover_name + doy + ending + '.pos'
 
             # Q: change directory to data directory & run RTKLib post processing command
             run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file,
@@ -628,37 +629,64 @@ def run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file
 
 
 def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_length):
-    """  get daily rtklib ENU solution files from solution directory and store all solutions in one (whole season) dataframe and pickle
+    """  get daily rtklib ENU solution files from solution directory and store all solutions in one dataframe and pickle
+    :param header_length: length of header in solution files (dependent on processing parameters)
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :param rover_name: name of rover
     :param resolution: processing time interval (in minutes)
     :param ending: suffix of solution file names (e.g. a varian of processing options: '_noglonass'
     :return: df_enu (pandas dataframe containing all seasons solution data columns ['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'])
     """
-    # create empty dataframe for all .ENU solution files
-    df_enu = pd.DataFrame()
+    # Q: read all existing ENU solution data from .pkl if already exists, else create empty dataframe
+    path_to_oldpickle = dest_path + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl'
+    if os.path.exists(path_to_oldpickle):
+        print(colored('\nReading already existing ENU solutions from pickle: %s' % path_to_oldpickle, 'yellow'))
+        df_enu_old = pd.read_pickle(path_to_oldpickle)
+    else:
+        print(colored('\nNo existing ENU solution pickle: %s' % path_to_oldpickle, 'yellow'))
+        df_enu_old = pd.DataFrame()
 
-    # Q read all .ENU files in solution directory, parse date and time columns to datetimeindex and add them to the dataframe
-    print(colored('\n\nstart reading all ENU solution files from receiver: %s' % rover_name, 'blue'))
-    for file in glob.iglob(dest_path + '20_solutions/' + rover_name + '/' + resolution + '/*' + ending + '.pos', recursive=True):
+    # Q: read all newly available .ENU files in solution directory, parse date and time columns to datetimeindex and add them to the dataframe
+    df_enu_new = pd.DataFrame(columns=['U', 'amb_state', 'nr_sat', 'std_u', 'date', 'time'])
+    path = dest_path + '20_solutions/' + rover_name + '/' + resolution + '/temp_' + rover_name
+    print(colored('\nReading all newly available ENU solution files from receiver: %s' % rover_name, 'blue'))
+    for file in glob.iglob(path + '/*' + ending + '.pos', recursive=True):
         print('reading ENU solution file: %s' % file)
         enu = pd.read_csv(file, header=header_length, delimiter=' ', skipinitialspace=True, index_col=['date_time'],
                           na_values=["NaN"],
                           usecols=[0, 1, 4, 5, 6, 9], names=['date', 'time', 'U', 'amb_state', 'nr_sat', 'std_u'],
                           parse_dates=[['date', 'time']])
-        df_enu = pd.concat([df_enu, enu], axis=0)
+
+        # add new enu data to df enu
+        df_enu_new = pd.concat([df_enu_new, enu], axis=0)
+
+        # move file from temp directory to solutions directory after reading
+        shutil.move(file, path + '/../' + os.path.basename(file))
+
+    # remove date and time columns
+    df_enu_new = df_enu_new.drop(columns=['date', 'time'])
+
+    # concatenate existing solutions with new solutions
+    df_enu_total = pd.concat([df_enu_old, df_enu_new], axis=0)
+
+    # detect all dublicates and only keep last dublicated entries
+    df_enu = df_enu_total[~df_enu_total.index.duplicated(keep='last')]
+    print(colored('\nstored all old and new ENU solution data (without dublicates) in dataframe df_enu:', 'blue'))
+    print(df_enu)
 
     # store dataframe as binary pickle format
     df_enu.to_pickle(dest_path + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl')
+    print(colored('\nstored all old and new ENU solution data (without dublicates) in pickle: ' + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
 
-    print(colored('\nstored all ENU solution data in dataframe df_enu:', 'blue'))
-    print(df_enu)
-    print(colored('\nstored all ENU solution data in pickle: ' + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl', 'blue'))
+    # delete temporary solution directory
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    print(colored('\nAll new ENU solution files are moved to solutions dir and temp solutions directory is removed', 'blue'))
 
     return df_enu
 
 
-def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambiguity=[1, 2, 5], ti_set_swe2zero=12, threshold=3, window='D', resample=[True, False], resample_resolution='30min', ending=''):
+def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity=[1, 2, 5], ti_set_swe2zero=12, threshold=3, window='D', resample=[True, False], resample_resolution='30min', ending=''):
     """ filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening)
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :param df_enu: pandas dataframe containing all seasons solution data columns ['date', 'time', 'U (m)', 'amb_state', 'nr_sat', 'std_u (m)']
@@ -671,14 +699,10 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambi
     :param resample: resample data to match the reference data's resolution (True) or not (False)
     :param resample_resolution: resolution for resampling the data (e.g., the resolution of the reference data)
     :param ending: suffix of solution file names (e.g. a varian of processing options: '_noglonass'
-    :return: df_enu, fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
+    :return: fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
     """
-    # Q: read all data from .pkl if no df_enu is provided
-    if df_enu is None:
-        print(colored('\nENU solution dataframe is NOT available, reading from pickle: %s' % '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl', 'yellow'))
-        df_enu = pd.read_pickle(dest_path + '20_solutions/' + rover_name + '_' + resolution + ending + '.pkl')
 
-    print(colored('\nENU solution dataframe is available, start filtering data', 'blue'))
+    print(colored('\nFiltering data', 'blue'))
 
     # Q: select only data where ambiguities are fixed (amb_state==1) or float (amb_state==2) and sort datetime index
     print('\nselect data with ambiguity solution state: %s' % ambiguity)
@@ -730,7 +754,7 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambi
     swe_gnss.to_pickle(dest_path + '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
     swe_gnss.to_csv(dest_path + '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.csv')
 
-    return df_enu, fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
+    return fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
 
 
 def read_swe_gnss(dest_path, swe_gnss, rover_name, resolution, ending):

@@ -51,17 +51,16 @@ total_backup = False                                                            
 solplot_backup = False                                                                          # copy (True) all new solution files and plots to server for backup, else (False) do not copy
 
 
-# todo: improve reading of solution files (not read all again, only new ones); e.g. copy new sol files to temp_sol dir,
-#  read new sol files, read existing pickle, store to df, check for and drop possible dublicates, store pickle
+# todo: add plot number of satellites over time
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
 yy_emlid, start_doy_emlid, end_doy_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
-                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
+                                                              parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
 yy, start_doy, end_doy = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
-                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
+                                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
 yy_base, start_doy_base, end_doy_base = f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
-                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
+                                                           parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
 
 # check available and new data to only further process new data
 yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid = f.check_data_doys(dst_path, yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid, resolution)
@@ -70,9 +69,9 @@ yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_d
 """ 1. run RTKLib automatically (instead of RTKPost Gui manually) """
 # process data using RTKLIB post processing command line tool 'rnx2rtkp' for a specific year and a range of day of years (doys)
 f.automate_rtklib_pp(dst_path, 'NMER', yy_emlid, ti_int, base, nav, sp3, resolution, ending, start_doy_emlid, end_doy_emlid,
-                              'NMER', options_Emlid)
+                     'NMER', options_Emlid)
 f.automate_rtklib_pp(dst_path, '3393', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy,
-                              'NMLR', options_Leica)
+                     'NMLR', options_Leica)
 
 
 ''' 2. Get RTKLib ENU solution files '''
@@ -83,12 +82,12 @@ df_enu_leica = f.get_rtklib_solutions(dst_path, 'NMLR', resolution, ending, head
 
 ''' 3. Filter and clean ENU solution data '''
 # filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening) and store results in pickle and .csv
-df_enu_emlid, fil_df_emlid, fil_emlid, fil_clean_emlid, m_emlid, s_emlid, jump_emlid, swe_gnss_emlid, swe_gnss_daily_emlid, std_gnss_daily_emlid = f.filter_rtklib_solutions(
-    dst_path, 'NMER', resolution, df_enu=None, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
+fil_df_emlid, fil_emlid, fil_clean_emlid, m_emlid, s_emlid, jump_emlid, swe_gnss_emlid, swe_gnss_daily_emlid, std_gnss_daily_emlid = f.filter_rtklib_solutions(
+    dst_path, 'NMER', resolution, df_enu=df_enu_emlid, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
     resample=False, resample_resolution='30min', ending=ending)
 
-df_enu_leica, fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_leica, swe_gnss_leica, swe_gnss_daily_leica, std_gnss_daily_leica = f.filter_rtklib_solutions(
-    dst_path, 'NMLR', resolution, df_enu=None, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
+fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_leica, swe_gnss_leica, swe_gnss_daily_leica, std_gnss_daily_leica = f.filter_rtklib_solutions(
+    dst_path, 'NMLR', resolution, df_enu=df_enu_leica, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
     resample=False, resample_resolution='30min', ending=ending)
 
 
@@ -121,41 +120,31 @@ f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
 
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
-if make_plots is True:
-    os.makedirs(dst_path + '30_plots/', exist_ok=True)
-
-    # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
-    f.plot_all_SWE(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min, buoy_daily, poles_daily,
-                   save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), y_lim=swe_y_lim, x_lim=xlim_dates)
-
-    # plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
-    f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
-                       save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_swe_y_lim, x_lim=xlim_dates)
-
-    # plot boxplot of differences (Emlid, manual, laser compared to Leica)
-    f.plot_swediff_boxplot(dst_path, diffs_swe_daily, y_lim=delta_swe_y_lim, save=save_plots)
-
-    # plot scatter plot (GNSS vs. manual/laser, daily/15min)
-    f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt, predict_daily, predict_emlid_daily,
-                   x_label='Manual', lim=swe_y_lim, save=save_plots)
-
-    f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe, predict_15min, predict_15min_emlid,
-                   x_label='Laser', lim=swe_y_lim, save=save_plots)
-
-    # plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
-    f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
-                   save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=acc_y_lim, x_lim=xlim_dates)
-
-    # plot Difference in Accumulation (compared to Leica)
-    f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
-                       save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_acc_y_lim, x_lim=xlim_dates)
-
-    # plot SWE, Density, Accumulation (from manual obs at Spuso)
-    f.plot_SWE_density_acc(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
-                           save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), suffix='', y_lim=acc_y_lim, x_lim=xlim_dates)
-
-    # plot PPP position solutions
-    # df_ppp = f.plot_PPP_solution(dst_path, save=False, suffix='', x_lim=xlim_dates)
+os.makedirs(dst_path + '30_plots/', exist_ok=True)
+# plot SWE (Leica, Emlid, manual, laser, buoy, poles)
+f.plot_all_SWE(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min, buoy_daily, poles_daily,
+               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), y_lim=swe_y_lim, x_lim=xlim_dates)
+# plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
+f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
+                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_swe_y_lim, x_lim=xlim_dates)
+# plot boxplot of differences (Emlid, manual, laser compared to Leica)
+f.plot_swediff_boxplot(dst_path, diffs_swe_daily, y_lim=delta_swe_y_lim, save=save_plots)
+# plot scatter plot (GNSS vs. manual/laser, daily/15min)
+f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt, predict_daily, predict_emlid_daily,
+               x_label='Manual', lim=swe_y_lim, save=save_plots)
+f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe, predict_15min, predict_15min_emlid,
+               x_label='Laser', lim=swe_y_lim, save=save_plots)
+# plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
+f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
+               save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=acc_y_lim, x_lim=xlim_dates)
+# plot Difference in Accumulation (compared to Leica)
+f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
+                   save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_acc_y_lim, x_lim=xlim_dates)
+# plot SWE, Density, Accumulation (from manual obs at Spuso)
+f.plot_SWE_density_acc(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
+                       save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), suffix='', y_lim=acc_y_lim, x_lim=xlim_dates)
+# plot PPP position solutions
+# df_ppp = f.plot_PPP_solution(dst_path, save=False, suffix='', x_lim=xlim_dates)
 
 
 if solplot_backup is True:
