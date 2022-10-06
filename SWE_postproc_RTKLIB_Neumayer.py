@@ -51,8 +51,6 @@ total_backup = False                                                            
 solplot_backup = False                                                                          # copy (True) all new solution files and plots to server for backup, else (False) do not copy
 
 
-# todo: plot solution quality
-
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
 yy_emlid, start_doy_emlid, end_doy_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,

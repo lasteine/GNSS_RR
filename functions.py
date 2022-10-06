@@ -1458,7 +1458,7 @@ def plot_nrsat(data_path, nr_sat_leica, nr_sat_emlid, save=[False, True], suffix
     nr_sat_emlid.plot(color='salmon', linestyle='--').grid()
 
     plt.xlabel(None)
-    plt.ylabel('Number of satelites', fontsize=14)
+    plt.ylabel('Number of satellites', fontsize=14)
     plt.legend(['High-end GNSS', 'Low-cost GNSS'], fontsize=12, loc='lower left')
     plt.xlim(x_lim)
     plt.gca().xaxis.set_major_locator(MonthLocator())
