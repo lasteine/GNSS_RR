@@ -712,8 +712,8 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu=None, ambi
 
     while jump.empty is False:
         print('\njump of height %s is detected!' % jump[0])
-        adj = m[(m.index > jump.index.format()[0])] - jump[0]  # correct jump [0]
-        m = m[~(m.index >= jump.index.format()[0])].append(adj)  # adjusted dataset
+        adj = m[(m.index >= jump.index.format()[0])] - jump[0]          # correct all observations after jump [0]
+        m = pd.concat([m[~(m.index >= jump.index.format()[0])], adj])   # concatenate all original obs before jump with adjusted values after jump
         jump = m[(m.diff() < -1000)]
 
     print('\nno jump detected!')
