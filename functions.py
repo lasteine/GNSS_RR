@@ -1449,6 +1449,67 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
         plt.show()
 
 
+def plot_nrsat(data_path, nr_sat_leica, nr_sat_emlid, save=[False, True], suffix='', y_lim=(0, 35), x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
+    """ Plot number of satellites for high-end and low-cost rovers
+    """
+    plt.close()
+    plt.figure()
+    nr_sat_leica.plot(linestyle='-', color='k', fontsize=12, figsize=(6, 5.5), ylim=y_lim, x_compat=True).grid()
+    nr_sat_emlid.plot(color='salmon', linestyle='--').grid()
+
+    plt.xlabel(None)
+    plt.ylabel('Number of satelites', fontsize=14)
+    plt.legend(['High-end GNSS', 'Low-cost GNSS'], fontsize=12, loc='lower left')
+    plt.xlim(x_lim)
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    if save is True:
+        plt.savefig(
+            data_path + '/30_plots/Nrsat_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png',
+            bbox_inches='tight')
+        plt.savefig(
+            data_path + '/30_plots/Nrsat_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf',
+            bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_solquality(data_path, amb_leica, amb_emlid, save=[False, True], suffix='', y_lim=(0, 10),
+                    x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
+    """ Plot quality of ambiguity resolution (1=fix, 2=float, 5=standalone) for high-end and low-cost rovers
+    """
+    plt.close()
+    plt.figure()
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(6, 5.5))
+    amb_emlid.plot(ax=axes[0], linestyle='', marker='o', markersize=2, color='salmon', ylim=y_lim).grid()
+    amb_leica.plot(ax=axes[1], linestyle='', marker='o', markersize=2, color='k', ylim=y_lim).grid()
+    plt.xlabel(None)
+    plt.ylabel(None)
+    # plt.legend(['High-end GNSS', 'Low-cost GNSS'], fontsize=12, loc='center left')
+    # plt.xlim(x_lim)
+    # plt.gca().xaxis.set_major_locator(MonthLocator())
+    # plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
+    axes[1].xaxis.set_major_locator(MonthLocator())
+    axes[1].xaxis.set_major_locator(MonthLocator(bymonthday=15))
+    axes[0].legend(['Low-cost GNSS'], fontsize=12)
+    axes[1].legend(['High-end GNSS'], fontsize=12)
+    plt.xticks(fontsize=14)
+    axes[1].set_xlim(x_lim)
+    axes[0].set_yticks(ticks=[1, 2, 5], labels=['Fixed', 'Float', 'Single'], fontsize=12)
+    axes[1].set_yticks(ticks=[1, 2, 5], labels=['Fixed', 'Float', 'Single'], fontsize=12)
+    if save is True:
+        plt.savefig(
+            data_path + '/30_plots/Ambstate_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png',
+            bbox_inches='tight')
+        plt.savefig(
+            data_path + '/30_plots/Ambstate_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf',
+            bbox_inches='tight')
+    else:
+        plt.show()
+
+
 def plot_PPP_solution(dest_path, save=[False, True], suffix='', x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Read PPP solution and plot it
     """

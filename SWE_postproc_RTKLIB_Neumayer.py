@@ -46,12 +46,12 @@ delta_acc_y_lim = (-400, 1000)                                                  
 swe_y_lim = (-100, 600)                                                                         # y-axis limit for water equivalent plots
 delta_swe_y_lim = (-200, 600)                                                                   # y-axis limit for delta water equivalent plots
 xlim_dates = dt.date(2021, 11, 26), dt.date(2022, 12, 1)                                        # time series date limits to plot on x-axis
-save_plots = False                                                                               # show (False) or save (True) plots
+save_plots = True                                                                               # show (False) or save (True) plots
 total_backup = False                                                                            # copy (True) all new data to server for backup, else (False) do not copy
 solplot_backup = False                                                                          # copy (True) all new solution files and plots to server for backup, else (False) do not copy
 
 
-# todo: add plot number of satellites over time
+# todo: plot solution quality
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
@@ -121,28 +121,43 @@ f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
 os.makedirs(dst_path + '30_plots/', exist_ok=True)
+
 # plot SWE (Leica, Emlid, manual, laser, buoy, poles)
 f.plot_all_SWE(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min, buoy_daily, poles_daily,
                save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), y_lim=swe_y_lim, x_lim=xlim_dates)
+
 # plot SWE differences (Emlid, manual, laser, buoy, poles compared to Leica)
 f.plot_all_diffSWE(dst_path, diffs_swe_daily, manual, laser_15min, buoy_daily, poles_daily,
                    save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_swe_y_lim, x_lim=xlim_dates)
+
 # plot boxplot of differences (Emlid, manual, laser compared to Leica)
 f.plot_swediff_boxplot(dst_path, diffs_swe_daily, y_lim=delta_swe_y_lim, save=save_plots)
+
 # plot scatter plot (GNSS vs. manual/laser, daily/15min)
 f.plot_scatter(dst_path, leica_daily.dswe, emlid_daily.dswe, manual.SWE_aboveAnt, predict_daily, predict_emlid_daily,
                x_label='Manual', lim=swe_y_lim, save=save_plots)
+
 f.plot_scatter(dst_path, gnss_leica.dswe, gnss_emlid.dswe, laser_15min.dswe, predict_15min, predict_15min_emlid,
                x_label='Laser', lim=swe_y_lim, save=save_plots)
+
 # plot all Accumulation data (Leica, Emlid, laser, buoy, poles)
 f.plot_all_Acc(dst_path, leica_daily, emlid_daily, manual, laser_15min, buoy_daily, poles_daily,
                save=save_plots, suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=acc_y_lim, x_lim=xlim_dates)
+
 # plot Difference in Accumulation (compared to Leica)
 f.plot_all_diffAcc(dst_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15min, buoy_daily, poles_daily,
                    save=save_plots, suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=delta_acc_y_lim, x_lim=xlim_dates)
+
 # plot SWE, Density, Accumulation (from manual obs at Spuso)
 f.plot_SWE_density_acc(dst_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
                        save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), suffix='', y_lim=acc_y_lim, x_lim=xlim_dates)
+
+# plot number of satellites
+f.plot_nrsat(dst_path, fil_df_leica.nr_sat, fil_df_emlid.nr_sat, save=save_plots, suffix='', y_lim=(0, 35), x_lim=xlim_dates)
+
+# plot ambiguity resolution state
+f.plot_solquality(dst_path, df_enu_leica.amb_state, df_enu_emlid.amb_state, save=save_plots, suffix='', y_lim=(0, 6), x_lim=xlim_dates)
+
 # plot PPP position solutions
 # df_ppp = f.plot_PPP_solution(dst_path, save=False, suffix='', x_lim=xlim_dates)
 
