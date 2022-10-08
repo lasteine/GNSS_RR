@@ -14,7 +14,7 @@ output: - position (.pos) file; (UTC, E, N, U)
 
 created by: L. Steiner (Orchid ID: 0000-0002-4958-0849)
 created on: 17.05.2022
-updated on: 05.10.2022
+updated on: 08.10.2022
 """
 
 # IMPORT modules
