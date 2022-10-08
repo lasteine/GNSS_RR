@@ -16,6 +16,7 @@ import gnsscal
 import datetime as dt
 import pandas as pd
 import numpy as np
+import jdcal
 import matplotlib.pyplot as plt
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
 from matplotlib.ticker import NullFormatter
@@ -54,7 +55,6 @@ def move_files2parentdir(dest_path, f):
     :param f: file in folder
     """
     # get parent directory
-    print(colored("move created daily obs files to parent dir", 'blue'))
     parent_dir = os.path.dirname(os.path.dirname(dest_path))
     # destination file in parent directory
     dest_path_file = os.path.join(parent_dir, f.split("\\")[-1])
@@ -160,7 +160,7 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
     if receiver == 'NMER':
         # Q: copy files from network drive to local temp folder
         if copy is True:
-            for f in glob.glob(source_path + '*.zip'):
+            for f in sorted(glob.glob(source_path + '*.zip'), reverse=False):
                 # construct the destination filename
                 dest_file = os.path.join(dest_path, f.split("\\")[-1])
                 # convert datetime to day of year (doy) from filename
@@ -169,7 +169,7 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
 
                 # Q: only copy files from server which are newer than the already existing doys of year=yy
 
-                if yy_file == year_max and doy_file > doy_max:
+                if (yy_file == year_max and doy_file > doy_max) or (yy_file > year_max):
                     # copy file if it does not already exist
                     if not os.path.exists(dest_file):
                         shutil.copy2(f, dest_path)
@@ -210,7 +210,7 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                 yy_file = os.path.basename(f).split('.')[1][:2]
 
                 # Q: only copy files from server which are newer than the already existing doys of year=yy
-                if yy_file == year_max and doy_file > doy_max:
+                if (yy_file == year_max and doy_file > doy_max) or (yy_file > year_max):
                     # copy file if it does not already exist
                     if not os.path.exists(dest_file):
                         shutil.copy2(f, dest_path)
@@ -235,7 +235,6 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
 
         else:
             pass
-
 
         # Q: move obs (and nav) files to parent dir
         if parent is True:
@@ -273,8 +272,14 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
                 for f in glob.glob(dest_path + '*.*[ongl]'):
                     move_files2parentdir(dest_path, f)
                 print(colored("\nfinished moving decompressed files to parent dir", 'blue'))
+
         else:
             print('files are NOT moved to parent directory!')
+
+    # Q: get the newest year, doy after copying and convert to modified julian date (mjd)
+    yy_file, doy_file = check_existing_files(dest_path, rover)
+    date_file = gnsscal.yrdoy2date(int('20' + yy_file), int(doy_file))
+    mjd_file = jdcal.gcal2jd(date_file.year, date_file.month, date_file.day)[1]
 
     # Q: delete temp directory
     if delete_temp is True:
@@ -282,7 +287,7 @@ def copy_rinex_files(source_path, dest_path, receiver=['NMLB', 'NMLR', 'NMER'], 
     else:
         print('temporary directory is NOT deleted!')
 
-    return year_max, doy_max, doy_file
+    return mjd_file
 
 
 def convert_datetime2doy_rinexfiles(dest_path, rover_prefix, rover_name):
@@ -460,87 +465,35 @@ def dayoverlapping2daily_rinexfiles(dest_path, rover_prefix, receiver, move=[Tru
     rename_merged_rinexfiles(dest_path, receiver, move)
 
 
-def check_data_doys(dest_path, yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid, resolution):
-    """ check new data in the processing folder. Check if all data are available for all three receivers.
+def get_sol_yeardoy(dest_path, resolution):
+    """ get the newest solution file year, doy, mjd, date for only further process new available data.
     :param resolution: processing time interval (minutes) for naming of output folder
-    :param yy_base: newest year of Leica base observation files
-    :param start_doy_base: newest existing doy in the processing folder before copying new data for Leica base
-    :param end_doy_base: newest doy after copying new files to the processing folder for Leica base
-    :param yy: newest year of Leica rover observation files
-    :param start_doy: newest existing doy in the processing folder before copying new data for Leica rover
-    :param end_doy: newest doy after copying new files to the processing folder for Leica rover
-    :param yy_emlid: newest year of Emlid rover observation files
-    :param start_doy_emlid: newest existing doy in the processing folder before copying new data for Emlid rover
-    :param end_doy_emlid: newest doy after copying new files to the processing folder for Emlid rover
-    :return: yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid
+    :return: start_yy, start_mjd, start_mjd_emlid
     """
-    print(colored("\ncheck new files (year and doy) in the processing folder", 'blue'))
-    # check if new files are present or not
-    if end_doy is None:
-        # newest doy is now last doy, as no new files are copied
-        end_doy = start_doy
-        doys = ['0']
-        # extract last processed doy from solution (.POS) files
-        for f in glob.iglob(dest_path + '20_solutions/NMLR/' + resolution + '/20' + yy + '*.POS', recursive=True):
-            sol_file = os.path.basename(f)
-            # extract doy from filename
-            doy = sol_file.split('.')[0][-3:]
-            # add doy to series of doys
-            doys.append(doy)
-        # get last doy from all processed solution files
-        start_doy = int(max(doys)) + 1
+    print(colored("\nget start year and mjd for further processing", 'blue'))
+    # get the newest solution file name
+    name_max = os.path.basename(sorted(glob.iglob(dest_path + '20_solutions/NMLR/' + resolution + '/*.POS', recursive=True), reverse=True)[0]).split('.')[0]
+    start_yy = name_max[2:4]
+    start_doy = int(name_max[-3:]) + 1
+    start_date = gnsscal.yrdoy2date(int('20' + start_yy), start_doy)
+    start_mjd = jdcal.gcal2jd(start_date.year, start_date.month, start_date.day)[1]
+    print(colored('start year %s, doy %s, mjd %s, date %s for further processing of Leica Rover' % (start_yy, start_doy, start_mjd, start_date), 'blue'))
 
-    if end_doy_emlid is None:
-        end_doy_emlid = start_doy_emlid
-        doys = ['0']
-        # extract last processed doy from solution (.POS) files
-        for f in glob.iglob(dest_path + '20_solutions/NMER/' + resolution + '/20' + yy + '*.POS', recursive=True):
-            sol_file = os.path.basename(f)
-            # extract doy from filename
-            doy = sol_file.split('.')[0][-3:]
-            # add doy to series of doys
-            doys.append(doy)
-        # get last doy from all processed solution files
-        start_doy_emlid = int(max(doys)) + 1
+    # get the newest emlid solution file name
+    name_max_emlid = os.path.basename(sorted(glob.iglob(dest_path + '20_solutions/NMER/' + resolution + '/*.POS', recursive=True), reverse=True)[0]).split('.')[0]
+    start_yy_emlid = name_max_emlid[2:4]
+    start_doy_emlid = int(name_max_emlid[-3:]) + 1
+    start_date_emlid = gnsscal.yrdoy2date(int('20' + start_yy_emlid), start_doy_emlid)
+    start_mjd_emlid = jdcal.gcal2jd(start_date_emlid.year, start_date_emlid.month, start_date_emlid.day)[1]
+    print(colored('start year %s, doy %s, mjd %s, date %s for further processing of Leica Rover' % (start_yy_emlid, start_doy_emlid, start_mjd_emlid, start_date_emlid), 'blue'))
 
-    if end_doy_base is None:
-        end_doy_base = start_doy_base
-        # get older doy from rover solution files
-        start_doy_base = int(min(start_doy, start_doy_emlid)) + 1
-
-    # check if newest year is similar for all receiver's data
-    if yy_base == yy:
-        print('\nLeica base and rover newest year of data is similar: %s' % yy_base)
-    else:
-        print(colored('\nLeica base and rover do NOT have similar newest year of data. CHECK raw data!', 'red'))
-        print('Newest years: \nLeica base = %s\nLeica rover = %s' % (yy_base, yy))
-
-    if yy_base == yy_emlid:
-        print('\nLeica base and Emlid rover newest year of data is similar: %s' % yy_base)
-    else:
-        print(colored('\nLeica base and Emlid rover do NOT have similar newest year of data. CHECK raw data!\n\n', 'red'))
-        print('Newest years: \nLeica base = %s\nEmlid rover = %s' % (yy_base, yy_emlid))
-
-    # check if newest day of year (doy) is similar for all receiver's data
-    if end_doy_base == end_doy:
-        print('\nLeica base and rover newest doy of data is similar: %s' % end_doy_base)
-    else:
-        print(colored('\nLeica base and rover do NOT have similar newest doy of data. CHECK raw data!', 'red'))
-        print('Newest doys: \nLeica base = %s\nLeica rover = %s' % (end_doy_base, end_doy))
-
-    if end_doy_base == end_doy_emlid:
-        print('\nLeica base and Emlid rover newest doy of data is similar: %s' % end_doy_base)
-    else:
-        print(colored('\nLeica base and Emlid rover do NOT have similar newest doy of data. CHECK raw data!', 'red'))
-        print('Newest doys: \nLeica base = %s\nEmlid rover = %s' % (end_doy_base, end_doy_emlid))
-
-    return yy_base, int(start_doy_base), int(end_doy_base), yy, int(start_doy), int(end_doy), yy_emlid, int(start_doy_emlid), int(end_doy_emlid)
+    return start_yy, start_mjd, start_mjd_emlid
 
 
 """ Define RTKLIB functions """
 
 
-def automate_rtklib_pp(dest_path, rover_prefix, yy, ti_int, base_prefix, brdc_nav_prefix, precise_nav_prefix, resolution, ending, doy_start=0, doy_end=366, rover_name=['NMER_original', 'NMER', 'NMLR'], options=['options_Emlid', 'options_Leica']):
+def automate_rtklib_pp(dest_path, rover_prefix, mjd_start, mjd_end, ti_int, base_prefix, brdc_nav_prefix, precise_nav_prefix, resolution, ending, rover_name=['NMER_original', 'NMER', 'NMLR'], options=['options_Emlid', 'options_Leica']):
     """ create input and output files for running RTKLib post processing automatically
         for all rover rinex observation files (. yyo) available in the data path directory
         get doy from rover file names with name structure:
@@ -549,7 +502,8 @@ def automate_rtklib_pp(dest_path, rover_prefix, yy, ti_int, base_prefix, brdc_na
             Emlid Rover (original): 'ReachM2_sladina-raw_202112041058.21O' [rover + datetime + '.' + yy + 'O']
         :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file (all data needs to be in one folder)
         :param rover_prefix: prefix of rover rinex filename
-        :param yy: year to process
+        :param yy: start year to process
+        :param yy: end year to process
         :param doy_start: start day of year (doy) for processing files, range (0, 365)
         :param doy_end: end doy for processing files, range (1, 366)
         :param resolution: processing time interval (in minutes)
@@ -563,34 +517,40 @@ def automate_rtklib_pp(dest_path, rover_prefix, yy, ti_int, base_prefix, brdc_na
     """
     # Q: run rtklib for all rover files in directory
     print(colored('\n\nstart processing files with RTKLIB from receiver: %s' % rover_name, 'blue'))
-    for file in glob.iglob(dest_path + rover_prefix + '*.' + yy + 'O', recursive=True):
+    for file in glob.iglob(dest_path + rover_prefix + '*.*O', recursive=True):
         # Q: get doy from rover filenames
         rover_file = os.path.basename(file)
         if rover_name == 'NMER_original':
-            # get doy, converted from datetime in Emlid original filename format (output from receiver, non-daily files)
-            doy = dt.datetime.strptime(rover_file.split('.')[0].split('_')[2], "%Y%m%d%H%M").strftime('%j')
+            # get date, year, modified julian date (mjd), doy, converted from datetime in Emlid original filename format (output from receiver, non-daily files)
+            date = dt.datetime.strptime(rover_file.split('.')[0].split('_')[2], "%Y%m%d%H%M")
+            year = str(date.year)[-2:]
+            mjd = jdcal.gcal2jd(date.year, date.month, date.day)[1]
+            doy = date.strftime('%j')
         if rover_name == 'NMER' or rover_name == 'NMLR':
-            # get doy directly from filename from Emlid pre-processed or Leica file name format (daily files)
+            # get year, doy, date, modified julian date (mjd) directly from filename from Emlid pre-processed or Leica file name format (daily files)
+            year = rover_file.split('.')[1][:2]
             doy = rover_file.split('.')[0][4:7]
+            date = gnsscal.yrdoy2date(int('20' + year), int(doy))
+            mjd = jdcal.gcal2jd(date.year, date.month, date.day)[1]
 
-        # only process files of selected year and inbetween the selected doy range
-        if doy_start <= int(doy) <= doy_end:
-            print('\nProcessing rover file: ' + rover_file, '; doy: ', doy)
+        # Q: only process files inbetween the selected mjd range
+        if mjd_start <= mjd <= mjd_end:
+            print('\nProcessing rover file: ' + rover_file, '; year: ', year, '; doy: ', doy)
 
             # convert doy to gpsweek and day of week (needed for precise orbit file names)
-            (gpsweek, dow) = gnsscal.yrdoy2gpswd(int('20' + yy), int(doy))
+            (gpsweek, dow) = gnsscal.yrdoy2gpswd(int('20' + year), int(doy))
 
             # define input and output filenames (for some reason it's not working when input files are stored in subfolders!)
-            base_file = base_prefix + doy + '0.' + yy + 'O'
-            broadcast_orbit_gps = brdc_nav_prefix + doy + '0.' + yy + 'n'
-            broadcast_orbit_glonass = brdc_nav_prefix + doy + '0.' + yy + 'g'
-            broadcast_orbit_galileo = brdc_nav_prefix + doy + '0.' + yy + 'l'
+            base_file = base_prefix + doy + '0.' + year + 'O'
+            broadcast_orbit_gps = brdc_nav_prefix + doy + '0.' + year + 'n'
+            broadcast_orbit_glonass = brdc_nav_prefix + doy + '0.' + year + 'g'
+            broadcast_orbit_galileo = brdc_nav_prefix + doy + '0.' + year + 'l'
             precise_orbit = precise_nav_prefix + str(gpsweek) + str(dow) + '.EPH_M'
 
             # create a solution directory if not existing
             sol_dir = '20_solutions/' + rover_name + '/' + resolution + '/temp_' + rover_name + '/'
             os.makedirs(dest_path + sol_dir, exist_ok=True)
-            output_file = sol_dir + '20' + yy + '_' + rover_name + doy + ending + '.pos'
+            output_file = sol_dir + '20' + year + '_' + rover_name + doy + ending + '.pos'
 
             # Q: change directory to data directory & run RTKLib post processing command
             run_rtklib_pp(dest_path, options, ti_int, output_file, rover_file, base_file,

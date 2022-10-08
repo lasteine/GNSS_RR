@@ -53,23 +53,21 @@ solplot_backup = False                                                          
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
-yy_emlid, start_doy_emlid, end_doy_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
+end_mjd_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
                                                               parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
-yy, start_doy, end_doy = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
+end_mjd = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
                                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
-yy_base, start_doy_base, end_doy_base = f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
+end_mjd_base = f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
                                                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
 
-# check available and new data to only further process new data
-yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid = f.check_data_doys(dst_path, yy_base, start_doy_base, end_doy_base, yy, start_doy, end_doy, yy_emlid, start_doy_emlid, end_doy_emlid, resolution)
+# check available solution data to only further process new data
+yy, start_mjd, start_mjd_emlid = f.get_sol_yeardoy(dst_path, resolution)
 
 
 """ 1. run RTKLib automatically (instead of RTKPost Gui manually) """
 # process data using RTKLIB post processing command line tool 'rnx2rtkp' for a specific year and a range of day of years (doys)
-f.automate_rtklib_pp(dst_path, 'NMER', yy_emlid, ti_int, base, nav, sp3, resolution, ending, start_doy_emlid, end_doy_emlid,
-                     'NMER', options_Emlid)
-f.automate_rtklib_pp(dst_path, '3393', yy, ti_int, base, nav, sp3, resolution, ending, start_doy, end_doy,
-                     'NMLR', options_Leica)
+f.automate_rtklib_pp(dst_path, 'NMER', start_mjd_emlid, end_mjd_emlid, ti_int, base, nav, sp3, resolution, ending, 'NMER', options_Emlid)
+f.automate_rtklib_pp(dst_path, '3393', start_mjd, end_mjd, ti_int, base, nav, sp3, resolution, ending, 'NMLR', options_Leica)
 
 
 ''' 2. Get RTKLib ENU solution files '''
