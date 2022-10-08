@@ -37,9 +37,6 @@ resolution = '15min'                                                            
 options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for high-end receiver
 options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for low-cost receiver
 ending = ''                                                                                     # file name suffix if needed: e.g., a variant of the processing '_eleambmask15', '_noglonass'
-# yy = str(22)                                                                                  # year to process
-# start_doy = 0                                                                                 # start day of year (doy) to process
-# end_doy = 5                                                                                   # end day of year (doy) to process
 use_laser_pickle = '00_reference_data/Laser/nm_laser.pkl'                                       # read laser log files (None) or use already stored pickle file '06_SHM/Laser/nm_laser.pkl'
 acc_y_lim = (-200, 1400)                                                                        # y-axis limit for accumulation plots
 delta_acc_y_lim = (-400, 1000)                                                                  # y-axis limit for delta accumulation plots
@@ -48,17 +45,17 @@ delta_swe_y_lim = (-200, 600)                                                   
 xlim_dates = dt.date(2021, 11, 26), dt.date(2022, 12, 1)                                        # time series date limits to plot on x-axis
 save_plots = True                                                                               # show (False) or save (True) plots
 total_backup = False                                                                            # copy (True) all new data to server for backup, else (False) do not copy
-solplot_backup = False                                                                          # copy (True) all new solution files and plots to server for backup, else (False) do not copy
+solplot_backup = True                                                                          # copy (True) all new solution files and plots to server for backup, else (False) do not copy
 
 
 """ 0. Preprocess data """
 # copy & uncompress new rinex files (NMLB + all orbits, NMLR, NMER) to processing folder 'data_neumayer/' (via a temporary folder for all preprocessing steps)
 end_mjd_emlid = f.copy_rinex_files(scr_path + 'id8282_refractolow/', dst_path + 'temp_NMER/', receiver='NMER', copy=True,
-                                                              parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
+                                   parent=True, hatanaka=True, move=True, delete_temp=True)  # for emlid rover: NMER
 end_mjd = f.copy_rinex_files(scr_path + 'id8281_refracto/', dst_path + 'temp_NMLR/', receiver='NMLR', copy=True,
-                                            parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
+                             parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica rover: NMLR
 end_mjd_base = f.copy_rinex_files(scr_path + 'id8283_reflecto/', dst_path + 'temp_NMLB/', receiver='NMLB', copy=True,
-                                                           parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
+                                  parent=True, hatanaka=True, move=True, delete_temp=True)  # for leica base: NMLB
 
 # check available solution data to only further process new data
 yy, start_mjd, start_mjd_emlid = f.get_sol_yeardoy(dst_path, resolution)
@@ -158,6 +155,7 @@ f.plot_solquality(dst_path, df_enu_leica.amb_state, df_enu_emlid.amb_state, save
 # df_ppp = f.plot_PPP_solution(dst_path, save=False, suffix='', x_lim=xlim_dates)
 
 
+''' 8. Back up data '''
 if solplot_backup is True:
     # copy solutions and plots directories back to server
     f.copy_solplotsdirs(dst_path, scr_path + '../Processing/Run_RTKLib/data_neumayer/')
