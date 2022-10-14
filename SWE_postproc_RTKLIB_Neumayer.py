@@ -26,6 +26,7 @@ import datetime as dt
 scr_path = '//smb.isibhv.dmawi.de/projects/p_gnss/Data/'                                        # data source path at AWI server (data copied from Antarctica via O2A)
 dst_path = 'C:/Users/sladina.BGEO02P102/Documents/SD_Card/Postdoc/AWI/05_Analysis/Run_RTKLib/data_neumayer/'    # data destination path for processing
 laser_path = '//smb.isibhv.dmawi.de/projects/mob/Neumayer/data/Rohdaten/shm/'                   # data source path at AWI server for snow accumulation laser sensor from AWI MetObs
+buoy_url = 'https://data.meereisportal.de/data/buoys/processed/2017S54_data.zip'                # data path for snow buoy data close to Spuso from sea ice physics group
 rover = 'ReachM2_sladina-raw_'                                                                  # 'NMER' or '3393' (old Emlid: 'ReachM2_sladina-raw_')
 rover_name = 'NMER_original'                                                                    # 'NMER' or 'NMER_original' or 'NMLR'
 receiver = 'NMER'                                                                               # 'NMER' or 'NMLB' or 'NMLR'
@@ -86,7 +87,7 @@ fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_leica, swe_gnss
 
 """ 4. Read reference sensors data """
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
-    dst_path, laser_path, yy, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle=use_laser_pickle)
+    dst_path, laser_path, yy, url=buoy_url, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle=use_laser_pickle)
 
 
 ''' 5. Convert swe to snow accumulation and add to df '''
@@ -163,3 +164,4 @@ if solplot_backup is True:
 if total_backup is True:
     # copy entire processing directory back to server
     f.copy4backup(dst_path + '../', scr_path + '../Processing/Run_RTKLib/')
+

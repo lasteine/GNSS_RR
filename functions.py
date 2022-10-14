@@ -21,6 +21,9 @@ import matplotlib.pyplot as plt
 from matplotlib.dates import YearLocator, MonthLocator, DateFormatter
 from matplotlib.ticker import NullFormatter
 from termcolor import colored
+import requests
+import zipfile
+import io
 
 
 """ Define general functions """
@@ -752,12 +755,23 @@ def read_manual_observations(dest_path):
     return manual2, ipol
 
 
-def read_snowbuoy_observations(dest_path, ipol_density=None):
+def read_snowbuoy_observations(dest_path, url, ipol_density=None):
     """ read snow buoy accumulation data from four sensors and convert to SWE & pressure, airtemp
         :param ipol_density: interpolated density data from manual reference observations
+        :param url: webpage url where daily updated snow buoy data  can be downloaded
         :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
         :return: buoy
     """
+    # Q: download newest snow buoy data from url
+    # get data from url
+    r = requests.get(url, allow_redirects=True)
+
+    # decompress file
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+
+    # store selected file from decompressed folder to working direcory subfolder
+    z.extract(z.filelist[2], path=(dest_path + '00_reference_data/Snowbuoy/'))
+
     # Q: read snow buoy data
     print('\nread snow buoy observations')
     buoy_all = pd.read_csv(dest_path + '00_reference_data/Snowbuoy/2017S54_300234011695900_proc.csv', header=0,
@@ -890,7 +904,7 @@ def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='00_re
     return laser, laser_filtered
 
 
-def read_reference_data(dest_path, laser_path, yy, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='00_reference_data/Laser/nm_laser.pkl'):
+def read_reference_data(dest_path, laser_path, yy, url, read_manual=[True, False], read_buoy=[True, False], read_poles=[True, False], read_laser=[True, False], laser_pickle='00_reference_data/Laser/nm_laser.pkl'):
     """ read reference sensor's observations from manual observations, a snow buoy sensor, a laser distance sensor and manual pole observations
     :param read_laser: read laser accumulation data (True) or not (False)
     :param read_poles: read poles accumulation data (True) or not (False)
@@ -898,6 +912,9 @@ def read_reference_data(dest_path, laser_path, yy, read_manual=[True, False], re
     :param read_manual: read manual observation data (True) or not (False)
     :param laser_pickle: read logfiles (laser_pickle == None) or pickle (e.g., '00_reference_data/Laser/nm_laser.pkl') creating/containing snow accumulation observations from laser distance sensor
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
+    :param url: path to snow buoy data on a webpage
+    :param yy: year to get first data
+    :param laser_path: path to laser distance sensor observation files
     :return: manual, ipol, buoy, poles, laser, laser_filtered
     """
     print(colored('\n\nread reference observations', 'blue'))
@@ -911,7 +928,7 @@ def read_reference_data(dest_path, laser_path, yy, read_manual=[True, False], re
 
     # Q: read snow buoy data (mm)
     if read_buoy is True:
-        buoy = read_snowbuoy_observations(dest_path, ipol_density=ipol)
+        buoy = read_snowbuoy_observations(dest_path, url, ipol_density=ipol)
     else:
         buoy = None
 
