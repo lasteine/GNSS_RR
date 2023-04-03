@@ -673,19 +673,15 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_lengt
     return df_enu
 
 
-def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity=[1, 2, 5], ti_set_swe2zero=12,
-                            threshold=3, window='D', resample=[True, False], resample_resolution='30min', ending=''):
+def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity=[1, 2, 5], threshold=2, window='D', ending=''):
     """ filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening)
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :param df_enu: pandas dataframe containing all seasons solution data columns ['date', 'time', 'U (m)', 'amb_state', 'nr_sat', 'std_u (m)']
     :param rover_name: name of rover
     :param resolution: processing time interval (in minutes)
     :param ambiguity: ambiguity resolution state [1: fixed, 2: float, 5: standalone]
-    :param ti_set_swe2zero: number of hours used to set swe to zero (default=12 hours)
-    :param threshold: set threshold for outlier removing using the standard deviation (default=3 sigma)
+    :param threshold: set threshold for outlier removing using the standard deviation (default=2 sigma)
     :param window: window for median filter (default='D')
-    :param resample: resample data to match the reference data's resolution (True) or not (False)
-    :param resample_resolution: resolution for resampling the data (e.g., the resolution of the reference data)
     :param ending: suffix of solution file names (e.g. a varian of processing options: '_noglonass'
     :return: fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
     """
@@ -697,42 +693,38 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity
     fil_df = pd.DataFrame(df_enu[(df_enu.amb_state == ambiguity)])
     fil_df.index = pd.DatetimeIndex(fil_df.index)
     fil_df = fil_df.sort_index()
+    u = fil_df.U * 1000     # convert up (swe) component to mm
 
-    # adapt up values to reference SWE values in mm (median of first hours)
-    swe_zero = int((60 / int(resolution[:2])) * ti_set_swe2zero)  # get number of observations to use to set swe to zero
-    fil = (fil_df.U - fil_df.U[:swe_zero].median()) * 1000
+    # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
+    print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
+    jump = u[(u.diff() < -1000)]
+
+    # get value of jump difference (of values directly after - before jump)
+    jump_ind = jump.index.format()[0]
+    jump_val = u[jump_ind] - u[:jump_ind][-2]
+
+    while jump.empty is False:
+        print('\njump of height %s is detected! at %s' % (jump_val, jump.index.format()[0]))
+        adj = u[(u.index >= jump.index.format()[0])] - jump_val  # correct all observations after jump [0]
+        u = pd.concat([u[~(u.index >= jump.index.format()[0])],
+                       adj])  # concatenate all original obs before jump with adjusted values after jump
+        jump = u[(u.diff() < -1000)]
+
+    print('\nno jump detected!')
 
     # Q: remove outliers based on x*sigma threshold
     print('\nremove outliers based on %s * sigma threshold' % threshold)
-    upper_limit = fil.median() + threshold * fil.std()
-    lower_limit = fil.median() - threshold * fil.std()
-    fil_clean = fil[(fil > lower_limit) & (fil < upper_limit)]
+    upper_limit = u.rolling('3D').median() + threshold * u.rolling('3D').std()
+    lower_limit = u.rolling('3D').median() - threshold * u.rolling('3D').std()
+    u_clean = u[(u > lower_limit) & (u < upper_limit)]
 
-    # Q: filter data with a rolling median and, if necessary, resample resolution to fit reference data resolution
-    if resample is True:
-        print(
-            '\ndata is median filtered (window length = %s) and resampled to %s resolution' % window % resample_resolution)
-        resolution = resample_resolution
-        m = fil_clean.rolling(window).median().resample(resample_resolution).median()
-    else:
-        print('\ndata is median filtered with window length: %s' % window)
-        m = fil_clean.rolling(window).median()
-    s = fil_clean.rolling(window).std()
+    # Q: filter data with a rolling median
+    print('\ndata is median filtered with window length: %s' % window)
+    swe_gnss = u_clean.rolling(window).median()
+    std_gnss = u_clean.rolling(window).std()
 
-    # outlier = (m.diff() > 1000)
-    # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
-    print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
-    jump = m[(m.diff() < -1000)]
-    print(jump)
-
-    while jump.empty is False:
-        print('\njump of height %s is detected! at %s' % (jump.iloc[0], jump.index.format()[0]))
-        adj = m[(m.index >= jump.index.format()[0])] - jump.iloc[0]  # correct all observations after jump [0]
-        m = pd.concat([m[~(m.index >= jump.index.format()[0])], adj])  # concatenate all original obs before jump with adjusted values after jump
-        jump = m[(m.diff() < -1000)]
-
-    print('\nno jump detected!')
-    swe_gnss = m - m[0]
+    # Q: correct values to be positive values (add min value -3258.5 on '2021-12-13 20:29:42')
+    swe_gnss = swe_gnss - swe_gnss.min()
     swe_gnss.index = swe_gnss.index + pd.Timedelta(seconds=18)
 
     # resample data per day, calculate median and standard deviation (noise) per day to fit manual reference data
@@ -748,7 +740,7 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity
         dest_path + '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.pkl')
     swe_gnss.to_csv(dest_path + '20_solutions/SWE_results/swe_gnss_' + rover_name + '_' + resolution + ending + '.csv')
 
-    return fil_df, fil, fil_clean, m, s, jump, swe_gnss, swe_gnss_daily, std_gnss_daily
+    return fil_df, u, u_clean, swe_gnss, std_gnss, swe_gnss_daily, std_gnss_daily
 
 
 def read_swe_gnss(dest_path, swe_gnss, rover_name, resolution, ending):
@@ -966,42 +958,60 @@ def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='nm_la
         '\nstored all old and new laser observations (without dublicates) to pickle: %s' + loc_laser_dir + laser_pickle + '.pkl',
         'blue'))
 
-    # Q: filter laser observations
+    return laser
+
+
+def filter_laser_observations(ipol, laser, threshold=1):
+    """ filter snow accumulation observations (minute resolution) from laser distance sensor data
+    :param threshold: threshold for removing outliers (default=1)
+    :param ipol: interpolated density data from manual reference observations
+    :param laser: laser data
+    :return: laser_filtered
+    """
+
+    # Q: remove outliers in laser observations
     print('\n-- filtering laser observations')
     # 0. select only observations without errors
     dsh = laser[(laser.error == 0)].dsh
 
-    # 1. only select observations bigger than the minimum oultier
+    # 1. remove huge outliers
     f = dsh[(dsh > dsh.min())]
 
-    # 2. only select observations where the gradient is smaller than 50cm (iteration)
-    outliers = f.index[(f.diff() > 500) | (f.diff() < -500)]
+    # 2. remove outliers based on an x sigma threshold
+    print('\nremove outliers based on %s * sigma threshold' % threshold)
+    upper_limit = f.rolling('7D').median() + threshold * f.rolling('7D').std()
+    lower_limit = f.rolling('7D').median() - threshold * f.rolling('7D').std()
+    f_clean = f[(f > lower_limit) & (f < upper_limit)]
+
+    # 3. remove remaining outliers based on their gradient
+    print('\nremove outliers based on gradient')
+    gradient = f_clean.diff()
+    outliers = f_clean.index[(gradient > 500) | (gradient < -500)]
     while outliers.empty is False:
-        outliers = f.index[(f.diff() > 500) | (f.diff() < -500)]
-        fil_dsh = f.loc[~f.index.isin(outliers)]
-        f = fil_dsh
+        fil_dsh = f_clean.loc[~f_clean.index.isin(outliers)]
+        f_clean = fil_dsh
+        gradient = f_clean.diff()
+        outliers = f_clean.index[(gradient > 500) | (gradient < -500)]
+
+    # Q: filter observations
+    print('\nmedian filtering')
+    laser_fil = f_clean.rolling('D').median()
+    laser_fil_std = f_clean.rolling('D').std()
 
     # calculate change in accumulation (in mm) and add it as an additional column to the dataframe
-    fil_dsh = (fil_dsh - fil_dsh[0])
-
-    # 3. filter observations
-    dsh_laser = fil_dsh.rolling('D').median()
-    dsh_laser_std = fil_dsh.rolling('D').std()
-
-    # 4. manually exclude remaining outliers
-    exclude_indizes = dsh_laser['2022-05'].index[(dsh_laser['2022-05'] < 400)]
-    dsh_laser = dsh_laser.loc[~(dsh_laser.index.isin(exclude_indizes))]
+    print('\ncalculate diff to min')
+    dsh_laser = (laser_fil - laser_fil.min())
 
     # Q: calculate SWE from accumulation data
     print('\n-- convert laser observations to SWE')
     laser_swe = convert_sh2swe(dsh_laser, ipol_density=ipol)
     laser_swe_constant = convert_sh2swe(dsh_laser)
 
-    # append new columns to existing poles dataframe
-    laser_filtered = pd.concat([dsh_laser, dsh_laser_std, laser_swe, laser_swe_constant], axis=1)
+    # append new columns to existing laser dataframe
+    laser_filtered = pd.concat([dsh_laser, laser_fil_std, laser_swe, laser_swe_constant], axis=1)
     laser_filtered.columns = ['dsh', 'dsh_std', 'dswe', 'dswe_const']
 
-    return laser, laser_filtered
+    return laser_filtered
 
 
 def read_reference_data(dest_path, laser_path, yy, url, read_manual=[True, False], read_buoy=[True, False],
@@ -1042,7 +1052,8 @@ def read_reference_data(dest_path, laser_path, yy, url, read_manual=[True, False
 
     # Q: read snow depth observations (minute resolution) from laser distance sensor data
     if read_laser is True:
-        laser, laser_filtered = read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle)
+        laser = read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle)
+        laser_filtered = filter_laser_observations(ipol, laser, threshold=1)
     else:
         laser, laser_filtered = None, None
 

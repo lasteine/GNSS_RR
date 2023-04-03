@@ -85,21 +85,17 @@ df_enu_leica = f.get_rtklib_solutions(dest_path, 'NMLR', resolution, ending, hea
 
 
 ''' 3. Filter and clean ENU solution data '''
-# filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening) and store results in pickle and .csv
-fil_df_emlid, fil_emlid, fil_clean_emlid, m_emlid, s_emlid, jump_emlid, swe_gnss_emlid, swe_gnss_daily_emlid, std_gnss_daily_emlid = f.filter_rtklib_solutions(
-    dest_path, 'NMER', resolution, df_enu=df_enu_emlid, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
-    resample=False, resample_resolution='30min', ending=ending)
+fil_df_emlid, u_emlid, u_clean_emlid, swe_gnss_emlid, std_gnss_emlid, swe_gnss_daily_emlid, std_gnss_daily_emlid = f.filter_rtklib_solutions(
+    dest_path, 'NMER', resolution, df_enu=df_enu_emlid, ambiguity=1, threshold=3, window='D', ending=ending)
 
-fil_df_leica, fil_leica, fil_clean_leica, m_leica, s_leica, jump_leica, swe_gnss_leica, swe_gnss_daily_leica, std_gnss_daily_leica = f.filter_rtklib_solutions(
-    dest_path, 'NMLR', resolution, df_enu=df_enu_leica, ambiguity=1, ti_set_swe2zero=12, threshold=3, window='D',
-    resample=False, resample_resolution='30min', ending=ending)
-
-# correct offset leica to emlid
-swe_gnss_emlid = swe_gnss_emlid - offset_le
-swe_gnss_daily_emlid = swe_gnss_daily_emlid - offset_le
+fil_df_leica, u_leica, u_clean_leica, swe_gnss_leica, std_gnss_leica, swe_gnss_daily_leica, std_gnss_daily_leica = f.filter_rtklib_solutions(
+    dest_path, 'NMLR', resolution, df_enu=df_enu_leica, ambiguity=1, threshold=3, window='D', ending=ending)
 
 
 """ 4. Read reference sensors data """
+
+# TODO: correct all values to only allow positive data
+
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
     dest_path, laser_path, yy, url=buoy_url, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='nm_laser')
 
@@ -182,7 +178,7 @@ df_rh, gnssir_acc, gnssir_acc_sel = f.read_gnssir(dest_path, ubuntu_path, base_n
 
 # plot gnss-ir snow accumulation results
 gnssir_acc_median, gnssir_acc_std = f.plot_gnssir(dest_path, gnssir_acc_sel, laser_daily, leica_daily, emlid=None, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_leica', x_lim=xlim_dates)
-f.plot_gnssir(dest_path, gnssir_acc_sel, laser_daily, leica_daily, emlid=emlid_daily, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'High-end GNSS-Refractometry', 'Low-cost GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_emlid', x_lim=xlim_dates)
+gnssir_acc_median, gnssir_acc_std = f.plot_gnssir(dest_path, gnssir_acc_sel, laser_daily, leica_daily, emlid=emlid_daily, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'High-end GNSS-Refractometry', 'Low-cost GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_emlid', x_lim=xlim_dates)
 
 
 ''' 9. Calculate snow density from GNSS-RR: Combine GNSS-IR & GNSS refractometry '''
@@ -244,34 +240,3 @@ if total_backup is True:
 # gnssir_acc.resample('D').std().median() # GNSS-IR
 # rms
 # np.sqrt(np.sum((f-g)**2)/n)
-
-# TODO: add copy reflectometry solution files from ubuntu localhost
-# Q: copy reflectometry solution files (*.txt) from the local Ubuntu server if not already existing
-ubuntu_path = '//wsl.localhost/Ubuntu/home/sladina/test/gnssrefl/data/'
-print(colored("\ncopy new reflectometry solution files", 'blue'))
-print(ubuntu_path)
-# get list of yearly directories newer than first year
-for f in glob.glob(ubuntu_path + '2*'):
-    year = int(os.path.basename(f))
-    print(year)
-    # if year >= int('20' + yy):
-    #     # copy missing laser observation files
-    #     for f in glob.glob(laser_path + year + '/*.[ls]??'):
-    #         file = os.path.basename(f)
-    #         # skip files of 2021 before 26th nov (no gps data before installation)
-    #         if int(file[2:8]) > 211125:
-    #             if not os.path.exists(loc_laser_dir + file):
-    #                 shutil.copy2(f, loc_laser_dir)
-    #                 print("file copied from %s to %s" % (f, loc_laser_dir))
-    #             else:
-    #                 # print(colored("\nfile in destination already exists: %s, \ncopy aborted!!!" % dest_path, 'yellow'))
-    #                 pass
-    #         else:
-    #             pass
-    # else:
-    #     pass
-print(colored("\nnew reflectometry solution files copied", 'blue'))
-
-# test
-if jump2.iloc[0] is not None:
-    print(jump2.iloc[0], jump2.index.format()[0])
