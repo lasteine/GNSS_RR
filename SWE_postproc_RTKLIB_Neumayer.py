@@ -93,9 +93,6 @@ fil_df_leica, u_leica, u_clean_leica, swe_gnss_leica, std_gnss_leica, swe_gnss_d
 
 
 """ 4. Read reference sensors data """
-
-# TODO: correct all values to only allow positive data
-
 manual, ipol, buoy, poles, laser, laser_filtered = f.read_reference_data(
     dest_path, laser_path, yy, url=buoy_url, read_manual=True, read_buoy=True, read_poles=True, read_laser=True, laser_pickle='nm_laser')
 
@@ -174,6 +171,7 @@ f.plot_solquality(dest_path, df_enu_leica.amb_state, df_enu_emlid.amb_state, sav
 # best results: ele=5-30, f=2, azi=30-160 & 210-310
 
 # read and filter gnss-ir snow accumulation results
+# TODO: correct gnss_ir results to only be positive
 df_rh, gnssir_acc, gnssir_acc_sel = f.read_gnssir(dest_path, ubuntu_path, base_name, yy, freq='2nd', excl_azi=True, copy=False, pickle='nmlb')
 
 # plot gnss-ir snow accumulation results

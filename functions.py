@@ -814,12 +814,23 @@ def read_snowbuoy_observations(dest_path, url, ipol_density=None):
                            names=['lat', 'lon', 'sh1', 'sh2', 'sh3', 'sh4', 'pressure', 'airtemp', 'bodytemp',
                                   'gpstime'])
 
-    # select only data from season 21/22
-    buoy = buoy_all['2021-11-26':]
+    # select only accumulation data from season 21/22 & convert to mm
+    buoy = buoy_all[['sh1', 'sh2', 'sh3', 'sh4']]['2021-11-26':] * 1000
+
+    # Q: adjust for snow mast heightening (approx. 1m elevated); value of jump difference (of values directly after - before jump): 2023-01-24 21:01:00 1036.0
+    print('\ndata is corrected for snow buoy heightening events (remove sudden jumps > 1m)')
+    jump_ind = '2023-01-24 21:01:00'
+    jump_val = 1036
+
+    print('\ncorrect jump of height %s: at %s' % (jump_val, jump_ind))
+    adj = buoy[['sh1', 'sh2', 'sh3', 'sh4']][
+              (buoy.index >= jump_ind)] + jump_val  # correct all observations after jump [0]
+    buoy_corr = pd.concat([buoy[['sh1', 'sh2', 'sh3', 'sh4']][~(buoy.index >= jump_ind)],
+                           adj])  # concatenate all original obs before jump with adjusted values after jump
 
     # Q: Differences in accumulation & conversion to SWE
     # calculate change in accumulation (in mm) for each buoy sensor add it as an additional column to the dataframe buoy
-    buoy_change = (buoy[['sh1', 'sh2', 'sh3', 'sh4']] - buoy[['sh1', 'sh2', 'sh3', 'sh4']][:1].values[0]) * 1000
+    buoy_change = (buoy_corr[['sh1', 'sh2', 'sh3', 'sh4']] - buoy_corr[['sh1', 'sh2', 'sh3', 'sh4']].min())
     buoy_change.columns = ['dsh1', 'dsh2', 'dsh3', 'dsh4']
 
     # convert snow accumulation to SWE (with interpolated and constant density values)
@@ -831,7 +842,7 @@ def read_snowbuoy_observations(dest_path, url, ipol_density=None):
     buoy_swe_constant.columns = ['dswe_const1', 'dswe_const2', 'dswe_const3', 'dswe_const4']
 
     # append new columns to existing buoy dataframe
-    buoy = pd.concat([buoy, buoy_change, buoy_swe, buoy_swe_constant], axis=1)
+    buoy = pd.concat([buoy_corr, buoy_change, buoy_swe, buoy_swe_constant], axis=1)
 
     return buoy
 
@@ -851,16 +862,19 @@ def read_pole_observations(dest_path, ipol_density=None):
     poles = pd.read_csv(loc_ref_dir + 'Pegelfeld_Spuso_Akkumulation.csv', header=0, delimiter=';',
                         index_col=0, skiprows=0, na_values=["NaN"], parse_dates=[0], dayfirst=True)
 
+    # convert to non-negative values
+    poles_corr = poles - poles.min().min()
+
     # Q: convert snow accumulation to SWE (with interpolated and constant density values)
     print('\n-- convert Pegelfeld Spuso pole observations to SWE')
-    poles_swe = convert_sh2swe(poles, ipol_density)
+    poles_swe = f.convert_sh2swe(poles_corr, ipol_density)
     poles_swe.columns = ['dswe'] + poles_swe.columns
 
-    poles_swe_constant = convert_sh2swe(poles)
+    poles_swe_constant = f.convert_sh2swe(poles_corr)
     poles_swe_constant.columns = ['dswe_const'] + poles_swe_constant.columns
 
     # append new columns to existing poles dataframe
-    poles = pd.concat([poles, poles_swe, poles_swe_constant], axis=1)
+    poles = pd.concat([poles_corr, poles_swe, poles_swe_constant], axis=1)
 
     return poles
 
