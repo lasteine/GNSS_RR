@@ -40,13 +40,13 @@ resolution = '15min'                                                            
 options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for high-end receiver
 options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for low-cost receiver
 ending = ''                                                                                     # file name suffix if needed: e.g., a variant of the processing '_eleambmask15', '_noglonass'
-acc_y_lim = (-200, 1600)                                                                        # y-axis limit for accumulation plots
+acc_y_lim = (-400, 1600)                                                                        # y-axis limit for accumulation plots
 delta_acc_y_lim = (-400, 1000)                                                                  # y-axis limit for delta accumulation plots
 swe_y_lim = (-100, 700)                                                                         # y-axis limit for water equivalent plots
 delta_swe_y_lim = (-200, 600)                                                                   # y-axis limit for delta water equivalent plots
-xlim_dates = dt.date(2021, 11, 26), dt.date(2023, 1, 17)      # time series date limits to plot on x-axis
-offset_le = 28                                                                                   # offset between leica and emlid rover antennas in mm w.e
-yy = '21'                                                                                        # initial year of observations
+xlim_dates = dt.date(2021, 11, 26), dt.date(2023, 1, 17)                                        # time series date limits to plot on x-axis
+cal_date = '2022-07-24'                                                                         # calibration date for snow density estimation
+yy = '21'                                                                                       # initial year of observations
 save_plots = True                                                                               # show (False) or save (True) plots
 total_backup = False                                                                            # copy (True) all new data to server for backup, else (False) do not copy
 solplot_backup = True                                                                          # copy (True) all new solution files and plots to server for backup, else (False) do not copy
@@ -107,7 +107,6 @@ leica_daily, emlid_daily, buoy_daily, poles_daily, laser_daily = f.resample_allo
 
 
 """ 6. Calculate differences, linear regressions, RMSE & MRB between GNSS and reference data """
-# TODO: calculate correct values (with correct input data)
 # calculate differences between reference data and GNSS (Leica/Emlid)
 diffs_sh_daily, diffs_swe_daily = f.calculate_differences2gnss(emlid_daily, leica_daily, manual, laser_daily, buoy_daily, poles_daily)
 diffs_sh_15min, diffs_swe_15min, laser_15min = f.calculate_differences2gnss_15min(gnss_emlid, gnss_leica, laser_filtered)
@@ -118,8 +117,8 @@ corr_leica_daily, corr_emlid_daily, corr_leica_15min, corr_emlid_15min = f.calcu
 # fit linear regression curve manual/laser vs. GNSS (daily & 15min)
 predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid = f.calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min)
 
-# calculate RMSE, MRB, and number of samples
-f.calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
+# calculate RMSE and number of samples
+f.calculate_rmse(diffs_swe_daily, diffs_swe_15min, manual, laser_15min)
 
 
 ''' 7. Plot results (SWE, ΔSWE, scatter) '''
@@ -155,7 +154,6 @@ f.plot_all_diffAcc(dest_path, diffs_sh_daily, diffs_sh_15min, manual, laser_15mi
 f.plot_SWE_density_acc(dest_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_emlid.dropna(), manual, laser_15min,
                        save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), suffix='', y_lim=acc_y_lim, x_lim=xlim_dates)
 
-# Q: plot quality control
 # plot number of satellites
 f.plot_nrsat(dest_path, fil_df_leica.nr_sat, fil_df_emlid.nr_sat, save=save_plots, suffix='', y_lim=(0, 35), x_lim=xlim_dates)
 
@@ -163,38 +161,32 @@ f.plot_nrsat(dest_path, fil_df_leica.nr_sat, fil_df_emlid.nr_sat, save=save_plot
 f.plot_solquality(dest_path, df_enu_leica.amb_state, df_enu_emlid.amb_state, save=save_plots, suffix='', y_lim=(0, 100), x_lim=xlim_dates)
 
 # plot PPP position solutions
+# TODO: calculate new values
 # df_ppp_ref = f.plot_PPP_solution(dest_path, 'NMLB', save=False, suffix='', x_lim=xlim_dates)
 # df_ppp_rover = f.plot_PPP_solution(dest_path, 'NMLR', save=False, suffix='', x_lim=xlim_dates)
 
 
 ''' 8. Read GNSS-IR results '''
-# best results: ele=5-30, f=2, azi=30-160 & 210-310
-
 # read and filter gnss-ir snow accumulation results
-# TODO: correct gnss_ir results to only be positive
-df_rh, gnssir_acc, gnssir_acc_sel = f.read_gnssir(dest_path, ubuntu_path, base_name, yy, freq='2nd', excl_azi=True, copy=False, pickle='nmlb')
+df_rh = f.read_gnssir(dest_path, ubuntu_path, base_name, yy, copy=False, pickle='nmlb')
+gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, gnssir_rh_clean = f.filter_gnssir(df_rh, freq='2nd', threshold=2)
 
 # plot gnss-ir snow accumulation results
-gnssir_acc_median, gnssir_acc_std = f.plot_gnssir(dest_path, gnssir_acc_sel, laser_daily, leica_daily, emlid=None, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_leica', x_lim=xlim_dates)
-gnssir_acc_median, gnssir_acc_std = f.plot_gnssir(dest_path, gnssir_acc_sel, laser_daily, leica_daily, emlid=emlid_daily, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'High-end GNSS-Refractometry', 'Low-cost GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_emlid', x_lim=xlim_dates)
+f.plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, laser_daily, leica_daily, emlid=None, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_leica', x_lim=xlim_dates, y_lim=acc_y_lim)
+f.plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, laser_daily, leica_daily, emlid=emlid_daily, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'High-end GNSS-Refractometry', 'Low-cost GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_emlid', x_lim=xlim_dates, y_lim=acc_y_lim)
 
 
 ''' 9. Calculate snow density from GNSS-RR: Combine GNSS-IR & GNSS refractometry '''
-density_leica, density_leica_cleaned = f.convert_swesh2density((leica_daily.dswe + 45).dropna(), (gnssir_acc_sel + 110).dropna())
-density_emlid, density_emlid_cleaned = f.convert_swesh2density((emlid_daily.dswe + 45).dropna(), (gnssir_acc_sel + 110).dropna())
+density_leica = f.convert_swesh2density(gnss_leica.dswe.dropna(), gnssir_acc.dropna(), cal_date, cal_val=manual.Density_aboveAnt[cal_date])
+density_emlid = f.convert_swesh2density(gnss_emlid.dswe.dropna(), gnssir_acc.dropna(), cal_date, cal_val=manual.Density_aboveAnt[cal_date])
 
-# calibrate with ref manual density above antenna where 1m is reached ['2022-09-22']
-cal_leica_1m = manual.Density_aboveAnt['2022-09-22'] - density_leica_cleaned['2022-09-22']
-cal_emlid_1m = manual.Density_aboveAnt['2022-09-22'] - density_emlid_cleaned['2022-09-22']
-
-# plot density time series
-f.plot_density(dest_path, density_leica_cleaned + cal_leica_1m, density_emlid=None, laser=None, manual=manual, leg=['High-end GNSS-RR', 'Manual'], save=save_plots, suffix='_leica', x_lim=xlim_dates)
-f.plot_density(dest_path, density_leica_cleaned, density_emlid_cleaned, laser=None, manual=manual, leg=['High-end GNSS-RR', 'Low-cost GNSS-RR', 'Manual'], save=save_plots, suffix='_leica_emlid', x_lim=xlim_dates)
-f.plot_density(dest_path, density_leica=None, density_emlid=density_emlid_cleaned + cal_emlid_1m, laser=None, manual=manual, leg=['_', 'Low-cost GNSS-RR', 'Manual'], save=save_plots, suffix='_emlid', x_lim=xlim_dates)
+# plot median filtered density time series (window=1week)
+f.plot_density(dest_path, density_leica, density_emlid, laser=None, manual=manual, leg=['High-end GNSS-RR', 'Low-cost GNSS-RR', 'Manual'], save=save_plots, suffix='_leica_emlid', x_lim=xlim_dates)
 
 # plot difference to manual density observation
-f.plot_diff_density(dest_path, manual.Density_aboveAnt - (density_leica_cleaned + cal_leica_1m), manual.Density_aboveAnt - (density_emlid_cleaned + cal_emlid_1m), laser=None, manual=manual, leg=['_', 'Low-cost GNSS-RR', 'Manual'], save=save_plots, suffix='_emlid', x_lim=xlim_dates)
+f.plot_diff_density(dest_path, manual.Density_aboveAnt - density_leica.resample('D').median(), manual.Density_aboveAnt - density_emlid.resample('D').median(), laser=None, manual=manual, leg=['High-end GNSS-RR', 'Low-cost GNSS-RR'], save=save_plots, suffix='_leica_emlid', x_lim=xlim_dates)
 
+# TODO: add scatter plot for density
 
 ''' 10. Back up data '''
 if solplot_backup is True:
@@ -206,31 +198,7 @@ if total_backup is True:
     f.copy4backup(dest_path + '../', scr_path + '../Processing/Run_RTKLib/')
 
 
-
-
-
-
-
 ''' New stuff '''
-# TODO: test ppp diff - works!
-# ppp_diff = ((df_ppp_rover.dh-df_ppp_ref.dh) * 1000)
-# ppp_diff_sel = ppp_diff[(ppp_diff.index > '2021-12-01')]
-# ppp_diff_sel = (ppp_diff_sel - ppp_diff_sel[0]).rolling('D').median()
-#
-# # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
-# print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
-# jump = ppp_diff_sel['2022-02-09'].median()  # detect jumps (> 1000mm) in the dataset
-#
-# print('\njump of height %s is detected!' % jump)
-# adj = ppp_diff_sel[(ppp_diff_sel.index >= '2022-02-09')] - jump  # correct all observations after jump [0]
-# ppp_diff_sel = pd.concat([ppp_diff_sel[~(ppp_diff_sel.index >= '2022-02-09')],
-#                adj])  # concatenate all original obs before jump with adjusted values after jump
-#
-# swe_gnss_ppp = ppp_diff_sel - ppp_diff_sel[0]
-# swe_gnss_ppp = swe_gnss_ppp[(swe_gnss_ppp > -1000) & (swe_gnss_ppp < 1000)]
-# swe_gnss_ppp_cleaned = swe_gnss_ppp[(swe_gnss_ppp.diff() > -50) & (swe_gnss_ppp.diff() < 50) ]
-# swe_gnss_ppp_cleaned.plot();plt.grid(); plt.show()
-
 # # STDs (AGM 2023)
 # laser_15min.dsh_std.mean()              # laser
 # std_gnss_daily_leica.dropna().mean()    # leica

@@ -867,10 +867,10 @@ def read_pole_observations(dest_path, ipol_density=None):
 
     # Q: convert snow accumulation to SWE (with interpolated and constant density values)
     print('\n-- convert Pegelfeld Spuso pole observations to SWE')
-    poles_swe = f.convert_sh2swe(poles_corr, ipol_density)
+    poles_swe = convert_sh2swe(poles_corr, ipol_density)
     poles_swe.columns = ['dswe'] + poles_swe.columns
 
-    poles_swe_constant = f.convert_sh2swe(poles_corr)
+    poles_swe_constant = convert_sh2swe(poles_corr)
     poles_swe_constant.columns = ['dswe_const'] + poles_swe_constant.columns
 
     # append new columns to existing poles dataframe
@@ -1075,19 +1075,26 @@ def read_reference_data(dest_path, laser_path, yy, url, read_manual=[True, False
 
     return manual, ipol, buoy, poles, laser, laser_filtered
 
-def convert_swesh2density(swe, sh):
-    """ calculate snow density [kg/m3] from SWE and snow accumulation: density[kg/m3] = SWE [mm w.e.] * 1000 / sh[m])
+
+def convert_swesh2density(swe, sh, cal_date, cal_val):
+    """ calculate, calibrate, and filter snow density [kg/m3] from SWE and snow accumulation: density[kg/m3] = SWE [mm w.e.] * 1000 / sh[m])
     :param swe: dataframe containing swe values (in mm w.e.) from GNSS-refractometry
     :param sh: dataframe containing accumulation values (in m) from GNSS-reflectometry
+    :param cal_date: date used for calibration (when 1m snow above antenna is reached)
+    :param cal_val: calibration value from manual observations
     :return: density
     """
     # calculate density
-    density = ((swe.resample('D').median() * 1000).divide(sh.resample('D').median(), axis=0)).dropna()
+    density = ((swe * 1000).divide(sh, axis=0)).dropna()
+
+    # calibrate with ref manual density above antenna where 1m is reached ['2022-07-24']
+    cal = cal_val - density.resample('D').median()[cal_date]
+    density_fil = density.rolling('7D').median() + cal
 
     # remove densities lower than the density of new snow (50 kg/m3) or higher than the density of firn (830 kg/m3) or ice (917 kg/m3)
-    density_cleaned = density[~((density < 50) | (density >= 830))]
+    density_cleaned = density_fil[~((density_fil < 50) | (density_fil >= 830))]
 
-    return density, density_cleaned
+    return density_cleaned
 
 def convert_swe2sh(swe, ipol_density=None):
     """ calculate snow accumulation from swe: sh[m]  = SWE [mm w.e.] * 1000 / density[kg/m3]) using a mean density values or interpolated densities
@@ -1306,7 +1313,7 @@ def calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid
     joined = joined['2021-12-23':]
     fit_15min = np.polyfit(joined.dswe_laser, joined.dswe_gnss, 1)
     predict_15min = np.poly1d(fit_15min)
-    print('Linear fit (laser vs. GNSS, 15min), Leica: nm = ', round(fit_15min[0], 2), ', b = ', int(fit_15min[1]))
+    print('Linear fit (laser vs. GNSS, 15min), Leica: m = ', round(fit_15min[0], 2), ', b = ', int(fit_15min[1]))
 
     # fit linear regression curve laser vs. GNSS (15min), Emlid
     joined = pd.concat([laser_15min.dswe, gnss_emlid.dswe], axis=1).dropna()
@@ -1314,14 +1321,14 @@ def calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid
     joined = joined['2021-12-23':]
     fit_15min_emlid = np.polyfit(joined.dswe_laser, joined.dswe_gnss, 1)
     predict_15min_emlid = np.poly1d(fit_15min_emlid)
-    print('Linear fit (laser vs. GNSS, 15min), Emlid: nm = ', round(fit_15min_emlid[0], 2), ', b = ',
+    print('Linear fit (laser vs. GNSS, 15min), Emlid: m = ', round(fit_15min_emlid[0], 2), ', b = ',
           int(fit_15min_emlid[1]))  # n=12, m=1.02, b=-8 mm w.e.
 
     return predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid
 
 
-def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
-    """ calculate root-mean-square-error (rmse), mean relative bias (mrb), and number of samples
+def calculate_rmse(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
+    """ calculate root-mean-square-error (rmse) and number of samples
         between GNSS SWE and manual/laser SWE observations
         :param diffs_swe_daily: differences between reference data and GNSS (Leica), daily resolution
         :param diffs_swe_15min: differences between reference data and GNSS (Leica), 15min resolution
@@ -1338,16 +1345,6 @@ def calculate_rmse_mrb(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
     print('RMSE (laser vs. GNSS, 15min), Leica: %.1f' % rmse_laser)
     rmse_laser_emlid = np.sqrt((np.sum(diffs_swe_15min.dswe_laser_emlid ** 2)) / len(diffs_swe_15min.dswe_laser_emlid))
     print('RMSE (laser vs. GNSS, 15min), Emlid: %.1f' % rmse_laser_emlid)
-
-    # MRB
-    mrb_manual = (diffs_swe_daily.dswe_manual / manual.SWE_aboveAnt).mean() * 100
-    print('\nMRB (manual vs. GNSS, daily), Leica: %.1f' % mrb_manual)
-    mrb_manual_emlid = (diffs_swe_daily.dswe_manual_emlid / manual.SWE_aboveAnt).mean() * 100
-    print('MRB (manual vs. GNSS, daily), Emlid: %.1f' % mrb_manual_emlid)
-    mrb_laser = (diffs_swe_15min.dswe_laser / laser_15min.dswe).mean() * 100
-    print('MRB (laser vs. GNSS, 15min), Leica: %.1f' % mrb_laser)
-    mrb_laser_emlid = (diffs_swe_15min.dswe_laser_emlid / laser_15min.dswe).mean() * 100
-    print('MRB (laser vs. GNSS, 15min), Emlid: %.1f' % mrb_laser_emlid)
 
     # Number of samples
     n_manual = len(diffs_swe_daily.dswe_manual.dropna())
@@ -1749,22 +1746,158 @@ def plot_PPP_solution(dest_path, receiver, save=[False, True], suffix='',
     return df_ppp
 
 
-def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102, 201, 202, 207, 'all', '1st', '2nd'], excl_azi=False, copy=False, pickle='nmlb'):
+# def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102, 201, 202, 207, 'all', '1st', '2nd'], excl_azi=False, copy=False, pickle='nmlb'):
+#     """ Plot GNSS interferometric reflectometry (GNSS-IR) accumulation results from the high-end base station
+#         :param dest_path: path to processing directory
+#         :param ubuntu_path: path to Ubuntu localhost where the GNSS-IR results are processed/stored (e.g.: '//wsl.localhost/Ubuntu/home/sladina/test/gnssrefl/data/')
+#         :param base_name: name of reflectometry solution file base_name, e.g.: 'nmlb'
+#         :param freq: chosen satellite system frequency to use results, 1=gps l1, 5=gps l5, 101=glonass l1, 102=glonass l2, 201=galileo l1, 202=galileo l2, 207=galileo l5
+#         :param excl_azi: include all azimuth ranges (False) or exclude specific azimuth ranges (True) with reflections from Spuso
+#         :copy: copy (True) or not (False) reflectometry solutions from ubuntu localhost to local folder
+#         :param pickle: name of pickle file (default = 'nmlb.pkl')
+#         :return df_rh, gnssir_acc, gnssir_acc_sel
+#     """
+#     # create local directory for laser observations
+#     loc_gnssir_dir = dest_path + '20_solutions/' + base_name + '/rh2-8m_ele5-30/'
+#     os.makedirs(loc_gnssir_dir, exist_ok=True)
+#
+#     # Q: copy reflectometry solution files (*.txt) from the local Ubuntu server if not already existing
+#     if copy is True:
+#         print(colored("\ncopy new reflectometry solution files", 'blue'))
+#         # get list of yearly directories
+#         for f in glob.glob(ubuntu_path + '2*'):
+#             year = os.path.basename(f)
+#             if int(year) >= int('20' + yy):
+#                 # copy missing reflectometry solution files
+#                 for f in glob.glob(ubuntu_path + year + '/results/' + base_name.lower() + '/rh2-8m_ele5-30/*.txt'):
+#                     file = os.path.basename(f)
+#                     # skip files of 2021 before 26th nov (no gps data before installation)
+#                     if not os.path.exists(loc_gnssir_dir + file):
+#                         shutil.copy2(f, loc_gnssir_dir)
+#                         print("file copied from %s to %s" % (f, loc_gnssir_dir))
+#                     else:
+#                         # print(colored("\nfile in destination already exists: %s, \ncopy aborted!!!" % dest_path, 'yellow'))
+#                         pass
+#             else:
+#                 pass
+#         print(colored("\nnew reflectometry solution files copied", 'blue'))
+#     else:
+#         print("\nno files to copy")
+#
+#     # Q: read all existing laser observations from .pkl if already exists, else create empty dataframe
+#     loc_gnssir_dir = dest_path + '20_solutions/' + base_name + '/rh2-8m_ele5-30/'
+#     path_to_oldpickle = loc_gnssir_dir + pickle + '.pkl'
+#     if os.path.exists(path_to_oldpickle):
+#         print(
+#             colored('\nReading already existing reflectometry solutions from pickle: %s' % path_to_oldpickle, 'yellow'))
+#         df_rh = pd.read_pickle(path_to_oldpickle)
+#         old_idx = df_rh.index[-1].date().strftime("%Y%j")
+#         old_idx_year = int(old_idx[:4])
+#         old_idx_doy = int(old_idx[-3:])
+#     else:
+#         print(colored('\nNo existing reflectometry solutions pickle!', 'yellow'))
+#         df_rh = pd.DataFrame()
+#         old_idx_year = 2021
+#         old_idx_doy = 330
+#
+#     # read all reflector height solution files in folder, parse mjd column to datetimeindex and add them to the dataframe
+#     print(colored('\nReading all new reflectometry solution files from: %s' % loc_gnssir_dir + '*.txt', 'blue'))
+#     for file in glob.iglob(loc_gnssir_dir + '*.txt', recursive=True):
+#         # read solution files newer than last entry in reflectometry solutions pickle, check year and doy
+#         if ((int(os.path.basename(file)[:4]) >= old_idx_year) & (int(os.path.basename(file)[-7:-4]) > old_idx_doy)) \
+#                 or (int(os.path.basename(file)[:4]) > old_idx_year):
+#             print(file)
+#
+#             # header: year, doy, RH (m), sat,UTCtime (hrs), Azim (deg), Amp (v/v), eminO (deg), emaxO (deg), NumbOf (values), freq,rise,EdotF (hrs), PkNoise, DelT (min), MJD, refr-appl (1=yes)
+#             rh = pd.read_csv(file, header=4, delimiter=' ', skipinitialspace=True, na_values=["NaN"],
+#                              names=['year', 'doy', 'RH', 'sat', 'UTCtime', 'Azim', 'Amp', 'eminO', 'emaxO', 'NumbOf',
+#                                     'freq', 'rise', 'EdotF', 'PkNoise', 'DelT', 'MJD', 'refr-appl'], index_col=False)
+#             df_rh = pd.concat([df_rh, rh], axis=0)
+#         else:
+#             pass
+#
+#     # convert year doy UTCtime to datetimeindex
+#     df_rh.index = pd.DatetimeIndex(pd.to_datetime(df_rh.year * 1000 + df_rh.doy, format='%Y%j')
+#                                    + pd.to_timedelta(df_rh.UTCtime, unit='h')).floor('s')
+#
+#     # detect all dublicates and only keep last dublicated entries
+#     df_rh = df_rh[~df_rh.index.duplicated(keep='last')]
+#
+#     # store dataframe as binary pickle format
+#     df_rh.to_pickle(loc_gnssir_dir + pickle + '.pkl')
+#     print(colored(
+#         '\nstored all old and new reflectometry solution data (without dublicates) in pickle: %s' + loc_gnssir_dir + pickle + '.pkl',
+#         'blue'))
+#
+#     # Q: reflector height and snow accumulation change
+#     # select frequencies to analyze
+#     if freq == 'all':  # select all frequencies from all systems
+#         print('all frequencies are selected')
+#         gnssir_rh = df_rh[['RH', 'Azim']]
+#     elif freq == '2nd':  # select all second frequencies from GPS, GLONASS, GALILEO
+#         print('2nd frequencies are selected')
+#         gnssir_rh = df_rh[['RH', 'Azim']][(df_rh.freq.isin([5, 102, 205, 207]))]
+#     elif freq == '1st':  # select all first frequencies from GPS, GLONASS, GALILEO
+#         print('1st frequencies are selected')
+#         gnssir_rh = df_rh[['RH', 'Azim']][(df_rh.freq.isin([1, 101, 201]))]
+#     else:  # select chosen single frequency
+#         print('single frequency is selected')
+#         gnssir_rh = df_rh[['RH', 'Azim']][(df_rh.freq == freq)]
+#
+#     # select to exclude azimuth angles with biased reflections (e.g., from Spuso)
+#     if excl_azi is False:
+#         gnssir_rh = df_rh.RH
+#     else:
+#         # excluding spuso e-m-wave bending and reflection zone azimuths
+#         gnssir_rh = gnssir_rh[(gnssir_rh.Azim > 30) & (gnssir_rh.Azim < 310)]
+#         gnssir_rh = gnssir_rh.RH[(gnssir_rh.Azim > 210) | (gnssir_rh.Azim < 160)]
+#
+#     # accumulation (frequency 1) in m
+#     gnssir_acc = (gnssir_rh[0] - gnssir_rh) * 1000
+#     gnssir_acc_res = gnssir_acc.resample('D').median()
+#
+#     # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
+#     print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
+#     jump = gnssir_acc_res[(gnssir_acc_res.diff() < -1000)]  # detect jumps (> 1000mm) in the dataset
+#
+#     while jump.empty is False:
+#         print('\njump of height %s is detected! at %s' % (jump[0], jump.index.format()[0]))
+#         # adjust resampled data
+#         adj = gnssir_acc_res[(gnssir_acc_res.index >= jump.index.format()[0])] - jump[
+#             0]  # correct all observations after jump [0]
+#         gnssir_acc_res = pd.concat([gnssir_acc_res[~(gnssir_acc_res.index >= jump.index.format()[0])],
+#                                     adj])  # concatenate all original obs before jump with adjusted values after jump
+#
+#         # adjust all data
+#         adj_nores = gnssir_acc[(gnssir_acc.index >= jump.index.format()[0])] - jump[
+#             0]  # correct all observations after jump [0]
+#         gnssir_acc = pd.concat([gnssir_acc[~(gnssir_acc.index >= jump.index.format()[0])],
+#                                 adj_nores])  # concatenate all original obs before jump with adjusted values after jump
+#
+#         # check if another jump exists
+#         jump = gnssir_acc_res[(gnssir_acc_res.diff() < -1000)]
+#
+#     print('\nno jump detected!')
+#     gnssir_acc_sel = gnssir_acc - gnssir_acc[0]
+#     gnssir_acc_sel.index = gnssir_acc_sel.index + pd.Timedelta(seconds=18)
+#
+#     return df_rh, gnssir_acc, gnssir_acc_sel
+
+
+def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', copy=False, pickle='nmlb'):
     """ Plot GNSS interferometric reflectometry (GNSS-IR) accumulation results from the high-end base station
         :param dest_path: path to processing directory
         :param ubuntu_path: path to Ubuntu localhost where the GNSS-IR results are processed/stored (e.g.: '//wsl.localhost/Ubuntu/home/sladina/test/gnssrefl/data/')
         :param base_name: name of reflectometry solution file base_name, e.g.: 'nmlb'
-        :param freq: chosen satellite system frequency to use results, 1=gps l1, 5=gps l5, 101=glonass l1, 102=glonass l2, 201=galileo l1, 202=galileo l2, 207=galileo l5
-        :param excl_azi: include all azimuth ranges (False) or exclude specific azimuth ranges (True) with reflections from Spuso
         :copy: copy (True) or not (False) reflectometry solutions from ubuntu localhost to local folder
         :param pickle: name of pickle file (default = 'nmlb.pkl')
-        :return df_rh, gnssir_acc, gnssir_acc_sel
+        :return df_rh
     """
-    # create local directory for laser observations
+    # create local directory for GNSS-IR observations
     loc_gnssir_dir = dest_path + '20_solutions/' + base_name + '/rh2-8m_ele5-30/'
     os.makedirs(loc_gnssir_dir, exist_ok=True)
 
-    # Q: copy reflectometry solution files (*.txt) from the local Ubuntu server if not already existing
+    # Q: copy GNSS-IR solution files (*.txt) from the local Ubuntu server if not already existing
     if copy is True:
         print(colored("\ncopy new reflectometry solution files", 'blue'))
         # get list of yearly directories
@@ -1787,7 +1920,7 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
     else:
         print("\nno files to copy")
 
-    # Q: read all existing laser observations from .pkl if already exists, else create empty dataframe
+    # Q: read all existing GNSS-IR observations from .pkl if already exists, else create empty dataframe
     loc_gnssir_dir = dest_path + '20_solutions/' + base_name + '/rh2-8m_ele5-30/'
     path_to_oldpickle = loc_gnssir_dir + pickle + '.pkl'
     if os.path.exists(path_to_oldpickle):
@@ -1832,8 +1965,19 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
         '\nstored all old and new reflectometry solution data (without dublicates) in pickle: %s' + loc_gnssir_dir + pickle + '.pkl',
         'blue'))
 
-    # Q: reflector height and snow accumulation change
-    # select frequencies to analyze
+    return df_rh
+
+
+def filter_gnssir(df_rh, freq=[1, 5, 101, 102, 201, 202, 207, 'all', '1st', '2nd'], threshold=2):
+    """ Plot GNSS interferometric reflectometry (GNSS-IR) accumulation results from the high-end base station
+        best results: ele=5-30, f=2, azi=30-160 & 210-310
+        :param df_rh: GNSS-IR data
+        :param freq: chosen satellite system frequency to use results, 1=gps l1, 5=gps l5, 101=glonass l1, 102=glonass l2, 201=galileo l1, 202=galileo l2, 207=galileo l5
+        :param threshold: threshold for outlier detection (x sigma)
+        :return df_rh, gnssir_acc, gnssir_acc_sel
+    """
+
+    # Q: select frequencies to analyze
     if freq == 'all':  # select all frequencies from all systems
         print('all frequencies are selected')
         gnssir_rh = df_rh[['RH', 'Azim']]
@@ -1847,60 +1991,70 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
         print('single frequency is selected')
         gnssir_rh = df_rh[['RH', 'Azim']][(df_rh.freq == freq)]
 
-    # select to exclude azimuth angles with biased reflections (e.g., from Spuso)
-    if excl_azi is False:
-        gnssir_rh = df_rh.RH
-    else:
-        # excluding spuso e-m-wave bending and reflection zone azimuths
-        gnssir_rh = gnssir_rh[(gnssir_rh.Azim > 30) & (gnssir_rh.Azim < 310)]
-        gnssir_rh = gnssir_rh.RH[(gnssir_rh.Azim > 210) | (gnssir_rh.Azim < 160)]
-
-    # accumulation (frequency 1) in m
-    gnssir_acc = (gnssir_rh[0] - gnssir_rh) * 1000
-    gnssir_acc_res = gnssir_acc.resample('D').median()
+    # Q: excluding spuso e-m-wave bending and reflection zone azimuths and convert to mm
+    gnssir_rh = gnssir_rh[(gnssir_rh.Azim > 30) & (gnssir_rh.Azim < 310)]
+    gnssir_rh = gnssir_rh.RH[(gnssir_rh.Azim > 210) | (gnssir_rh.Azim < 160)] * 1000
 
     # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
     print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
-    jump = gnssir_acc_res[(gnssir_acc_res.diff() < -1000)]  # detect jumps (> 1000mm) in the dataset
+    # sort index
+    gnssir_rh = gnssir_rh.sort_index()
 
+    # detect jump
+    jump = gnssir_rh[(gnssir_rh.diff() > 2500)]  # detect jumps (> 2500mm) in the dataset
+
+    # get value of jump difference (of values directly after - before jump)
+    jump_ind = jump.index.format()[0]
+    jump_val = gnssir_rh[jump_ind] - gnssir_rh[:jump_ind][-2]
+
+    # detect and correct all jumps
     while jump.empty is False:
-        print('\njump of height %s is detected! at %s' % (jump[0], jump.index.format()[0]))
-        # adjust resampled data
-        adj = gnssir_acc_res[(gnssir_acc_res.index >= jump.index.format()[0])] - jump[
-            0]  # correct all observations after jump [0]
-        gnssir_acc_res = pd.concat([gnssir_acc_res[~(gnssir_acc_res.index >= jump.index.format()[0])],
-                                    adj])  # concatenate all original obs before jump with adjusted values after jump
-
-        # adjust all data
-        adj_nores = gnssir_acc[(gnssir_acc.index >= jump.index.format()[0])] - jump[
-            0]  # correct all observations after jump [0]
-        gnssir_acc = pd.concat([gnssir_acc[~(gnssir_acc.index >= jump.index.format()[0])],
-                                adj_nores])  # concatenate all original obs before jump with adjusted values after jump
-
-        # check if another jump exists
-        jump = gnssir_acc_res[(gnssir_acc_res.diff() < -1000)]
+        print('\njump of height %s is detected! at %s' % (jump_val, jump.index.format()[0]))
+        adj = gnssir_rh[
+                  (gnssir_rh.index >= jump.index.format()[0])] - jump_val  # correct all observations after jump [0]
+        gnssir_rh = pd.concat([gnssir_rh[~(gnssir_rh.index >= jump.index.format()[0])],
+                               adj])  # concatenate all original obs before jump with adjusted values after jump
+        jump = gnssir_rh[(gnssir_rh.diff() > 2500)]
 
     print('\nno jump detected!')
-    gnssir_acc_sel = gnssir_acc - gnssir_acc[0]
-    gnssir_acc_sel.index = gnssir_acc_sel.index + pd.Timedelta(seconds=18)
 
-    return df_rh, gnssir_acc, gnssir_acc_sel
+    # Q: remove outliers based on x*sigma threshold
+    print('\nremove outliers based on %s * sigma threshold' % threshold)
+    upper_limit = gnssir_rh.rolling('3D').median() + threshold * gnssir_rh.rolling('3D').std()
+    lower_limit = gnssir_rh.rolling('3D').median() - threshold * gnssir_rh.rolling('3D').std()
+    gnssir_rh_clean = gnssir_rh[(gnssir_rh > lower_limit) & (gnssir_rh < upper_limit)]
+
+    # resample to 15min
+    gnssir_rh_clean = gnssir_rh_clean.resample('15min').median().dropna()
+    gnssir_rh_clean_daily = gnssir_rh_clean.resample('D').median()
+
+    # Q: convert to accumulation & only allow non-negative values, adjust to maximum
+    gnssir_acc = (gnssir_rh_clean_daily.max() - gnssir_rh_clean)
+
+    # resample accumulation data
+    gnssir_acc_daily = gnssir_acc.resample('D').median()
+    gnssir_acc_daily_std = gnssir_acc.resample('D').std()
+
+    return gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, gnssir_rh_clean
 
 
-def plot_gnssir(dest_path, gnssir_acc, laser, leica, emlid=None, manual=None, buoy=None, poles=None,
-                leg=['_', 'GNSS-IR', 'Laser (SHM)', 'High-end GNSS'], save=False, suffix='', x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
+def plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, laser, leica, emlid=None, manual=None,
+                buoy=None, poles=None,
+                leg=['_', 'GNSS-IR', 'Laser (SHM)', 'High-end GNSS'], save=False, suffix='',
+                x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1)), y_lim=(-400,1600)):
     """ Plot GNSS interferometric reflectometry (GNSS-IR) accumulation results from the high-end base station """
 
-    # plot gnssir snow accumulation (resampled median per day & 1 std)
+    # plot gnssir snow accumulation (resampled median per day)
     plt.close()
-    gnssir_acc_median = gnssir_acc.resample('D').median().dropna()
-    gnssir_acc_std = 2 * gnssir_acc.resample('D').std().median()
-    gnssir_acc_median.plot(color='steelblue', ylim=(-200, 1600), fontsize=12,
-                           xlim=x_lim,
-                           figsize=(6, 5.5)).grid()
+    gnssir_acc_daily.dropna().plot(color='steelblue', ylim=y_lim, fontsize=12,
+                          xlim=x_lim,
+                          figsize=(6, 5.5)).grid()
 
-    plt.fill_between(gnssir_acc_median.index, gnssir_acc_median - gnssir_acc_std, gnssir_acc_median + gnssir_acc_std,
-                     color="steelblue", alpha=0.4)
+    # plot variation: use all GNSS-IR results
+    gnssir_acc.plot(color="steelblue", alpha=0.4)
+
+    # plot variation: use 2 * sigma GNSS-IR results
+    # plt.fill_between(gnssir_acc_daily.index, gnssir_acc_daily - 2 * gnssir_acc_daily_std, gnssir_acc_daily + 2 * gnssir_acc_daily_std, color="steelblue", alpha=0.4)
 
     # plot gnss-refractometry accumulation data (converted from SWE)
     if leica is not None:
@@ -1924,7 +2078,7 @@ def plot_gnssir(dest_path, gnssir_acc, laser, leica, emlid=None, manual=None, bu
                  linestyle=':', alpha=0.6)
 
     # define plot settings
-    plt.legend(leg, fontsize=12, loc='upper left')
+    plt.legend(leg, fontsize=12, loc='lower right')
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.grid()
@@ -1938,8 +2092,6 @@ def plot_gnssir(dest_path, gnssir_acc, laser, leica, emlid=None, manual=None, bu
     else:
         plt.show()
 
-    return gnssir_acc_median, gnssir_acc_std
-
 
 def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=None, leg=['High-end GNSS-RR', 'Manual'], save=False, suffix='', x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Plot derived density timeseries from GNSS reflectometry based accumulation and GNSS-refractometry based SWE """
@@ -1947,16 +2099,13 @@ def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=Non
     # plot density (all data & resampled median per day)
     plt.close()
     if density_leica is not None:
-        density_leica.plot(color='crimson', linestyle=' ', marker='+', markersize=6, markeredgewidth=1, ylim=(-1, 1000), fontsize=12,
-                        xlim=x_lim,
-                        figsize=(6, 5.5)).grid()
+        density_leica.plot(color='crimson', linestyle='-', ylim=(-1, 1000), fontsize=12, xlim=x_lim, figsize=(6, 5.5)).grid()
     else:
         if density_emlid is not None:
-            density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=4, markeredgewidth=0, ylim=(-1, 1000), fontsize=12,
-                        xlim=x_lim, figsize=(6, 5.5)).grid()
+            density_emlid.plot(color='salmon', linestyle='--', ylim=(-1, 1000), fontsize=12, xlim=x_lim, figsize=(6, 5.5)).grid()
 
     if density_emlid is not None:
-        density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=4, markeredgewidth=0).grid()
+        density_emlid.plot(color='salmon', linestyle='--').grid()
 
     # plt.fill_between(gnssir_acc_median.index, gnssir_acc_median - gnssir_acc_std, gnssir_acc_median + gnssir_acc_std, color="steelblue", alpha=0.4)
 
@@ -1980,7 +2129,7 @@ def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=Non
         laser.dsh.plot(color='darkblue', linestyle='-.').grid()
 
     # define plot settings
-    plt.legend(leg, fontsize=12, loc='upper left')
+    plt.legend(leg, fontsize=12, loc='upper right')
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.grid()
@@ -2003,17 +2152,17 @@ def plot_diff_density(dest_path, density_leica, density_emlid, laser=None, manua
     plt.close()
 
     if density_leica is not None:
-        density_leica.plot(color='crimson', linestyle=' ', marker='+', markersize=6, markeredgewidth=1,
-                           ylim=(-400, 400), fontsize=12,
+        density_leica.plot(color='k', linestyle=' ', marker='o', markersize=5, markeredgewidth=1,
+                           ylim=(-300, 300), fontsize=12,
                            xlim=x_lim, figsize=(6, 5.5)).grid()
 
     if density_emlid is not None:
-        density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=4, markeredgewidth=0, ylim=(-400, 400),
+        density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=5, markeredgewidth=1, ylim=(-300, 300),
                            fontsize=12,
                            xlim=x_lim, figsize=(6, 5.5)).grid()
 
     # define plot settings
-    plt.legend(leg, fontsize=12, loc='upper left')
+    plt.legend(leg, fontsize=12, loc='upper right')
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.grid()
