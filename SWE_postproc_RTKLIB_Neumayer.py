@@ -40,11 +40,11 @@ resolution = '15min'                                                            
 options_Leica = 'rtkpost_options_Ladina_Leica_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for high-end receiver
 options_Emlid = 'rtkpost_options_Ladina_Emlid_statisch_multisystemfrequency_neumayer_900_15'    # name of RTKLIB configuration file (.conf) for low-cost receiver
 ending = ''                                                                                     # file name suffix if needed: e.g., a variant of the processing '_eleambmask15', '_noglonass'
-acc_y_lim = (-400, 1600)                                                                        # y-axis limit for accumulation plots
-delta_acc_y_lim = (-400, 1000)                                                                  # y-axis limit for delta accumulation plots
+acc_y_lim = (-100, 2000)                                                                        # y-axis limit for accumulation plots
+delta_acc_y_lim = (-200, 1000)                                                                  # y-axis limit for delta accumulation plots
 swe_y_lim = (-100, 700)                                                                         # y-axis limit for water equivalent plots
-delta_swe_y_lim = (-200, 600)                                                                   # y-axis limit for delta water equivalent plots
-xlim_dates = dt.date(2021, 11, 26), dt.date(2023, 1, 17)                                        # time series date limits to plot on x-axis
+delta_swe_y_lim = (-100, 500)                                                                   # y-axis limit for delta water equivalent plots
+xlim_dates = dt.date(2021, 11, 26), dt.date(2023, 4, 1)                                        # time series date limits to plot on x-axis
 cal_date = '2022-07-24'                                                                         # calibration date for snow density estimation
 yy = '21'                                                                                       # initial year of observations
 save_plots = True                                                                               # show (False) or save (True) plots
@@ -155,13 +155,12 @@ f.plot_SWE_density_acc(dest_path, swe_gnss_daily_leica.dropna(), swe_gnss_daily_
                        save=save_plots, std_leica=std_gnss_daily_leica.dropna(), std_emlid=std_gnss_daily_emlid.dropna(), suffix='', y_lim=acc_y_lim, x_lim=xlim_dates)
 
 # plot number of satellites
-f.plot_nrsat(dest_path, fil_df_leica.nr_sat, fil_df_emlid.nr_sat, save=save_plots, suffix='', y_lim=(0, 35), x_lim=xlim_dates)
+f.plot_nrsat(dest_path, fil_df_leica.nr_sat, fil_df_emlid.nr_sat, save=save_plots, suffix='', y_lim=(0, 25), x_lim=xlim_dates)
 
 # plot ambiguity resolution state
 f.plot_solquality(dest_path, df_enu_leica.amb_state, df_enu_emlid.amb_state, save=save_plots, suffix='', y_lim=(0, 100), x_lim=xlim_dates)
 
-# plot PPP position solutions
-# TODO: calculate new values
+## plot PPP position solutions
 # df_ppp_ref = f.plot_PPP_solution(dest_path, 'NMLB', save=False, suffix='', x_lim=xlim_dates)
 # df_ppp_rover = f.plot_PPP_solution(dest_path, 'NMLR', save=False, suffix='', x_lim=xlim_dates)
 
@@ -172,8 +171,8 @@ df_rh = f.read_gnssir(dest_path, ubuntu_path, base_name, yy, copy=False, pickle=
 gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, gnssir_rh_clean = f.filter_gnssir(df_rh, freq='2nd', threshold=2)
 
 # plot gnss-ir snow accumulation results
-f.plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, laser_daily, leica_daily, emlid=None, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_leica', x_lim=xlim_dates, y_lim=acc_y_lim)
-f.plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, laser_daily, leica_daily, emlid=emlid_daily, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'High-end GNSS-Refractometry', 'Low-cost GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_emlid', x_lim=xlim_dates, y_lim=acc_y_lim)
+# f.plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, laser_daily, leica_daily, emlid=None, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_leica', x_lim=xlim_dates, y_lim=acc_y_lim)
+f.plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, laser_daily, leica_daily, emlid=emlid_daily, manual=None, buoy=None, poles=None, leg=['GNSS-Reflectometry', '_', 'High-end GNSS-Refractometry', 'Low-cost GNSS-Refractometry', 'Laser (SHM)'], save=save_plots, suffix='_leica_emlid', x_lim=xlim_dates, y_lim=acc_y_lim)
 
 
 ''' 9. Calculate snow density from GNSS-RR: Combine GNSS-IR & GNSS refractometry '''
