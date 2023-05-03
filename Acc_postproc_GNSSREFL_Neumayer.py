@@ -15,7 +15,9 @@ output: - Reflector height (.txt) file; (year, doy, RH, sat, UTCtime, Azim, Amp,
 requirements:   - install gnssrefl on Linux/Mac (gnssrefl is not working on Windows, see gnssrefl docs)
                 - gnssrefl (https://github.com/kristinemlarson/gnssrefl)
                 - gfzrnx (https://dataservices.gfz-potsdam.de/panmetaworks/showshort.php?id=escidoc:1577894)
-                - path to both programs added to the system environment variables
+                - wget
+                - 7zip
+                - path to all programs added to the system environment variables
 
 created by: L. Steiner (Orchid ID: 0000-0002-4958-0849)
 created on: 03.05.2023
@@ -35,11 +37,14 @@ from termcolor import colored
 # CHOOSE: DEFINE data paths, file names (base, rover, navigation orbits, precise orbits, config), time interval, and processing steps !!!
 gnssir_path = '//wsl.localhost/Ubuntu/home/sladina/test/gnssrefl/'
 json = gnssir_path + '/data/input/nmlb.json'
-sp3_outdir = gnssir_path + 'data/tmp/orbits/'
+sp3_outdir = gnssir_path + 'data/temp/orbits/'
+rin_temp = gnssir_path + 'data/temp/rin3/'
 raporbit_path = 'ftp://isdcftp.gfz-potsdam.de/gnss/products/rapid'   # later: subdir /w????/ > 2184
+dest_path = 'C:/Users/sladina.BGEO02P102/Documents/SD_Card/Postdoc/AWI/05_Analysis/Run_RTKLib/data_neumayer/'    # data destination path for processing
+prefix = 'nmlb'
 
 
-# TODO: download, unzip, rename rapid orbits (need to match the gnssrefl input format!)
+# Q: download, unzip, rename rapid orbits (need to match the gnssrefl input format!)
 # download all .SP3 rapid orbits from ftp server's subfolders
 subprocess.call('wget -r -np -nc -nH --cut-dirs=4 -A .SP3.gz ' + raporbit_path + ' -P ' + sp3_outdir)
 print(colored("\nGFZ rapid orbits downloaded to: %s" % sp3_outdir, 'blue'))
@@ -73,7 +78,31 @@ for orbit_file in glob.glob(sp3_outdir + '*.SP3'):
 print(colored("\nGFZ rapid orbits renamed and moved to yearly (e.g. 2021): %s" % dest_dir, 'blue'))
 
 
-# TODO: copy, rename, convert, move rinex files
+# Q: copy, rename, convert, move rinex files
+for rinex_file in glob.glob(dest_path + '3387*0.*[olng]'):
+    # copy base rinex obs [o] and nav [lng] files
+    f.copy_file_no_overwrite(dest_path, rin_temp, os.path.basename(rinex_file))
+
+    # rename base rinex files if not exist
+    outfile = prefix + os.path.basename(rinex_file)[4:]
+    if not os.path.exists(rin_temp + '/' + outfile):
+        os.rename(rin_temp + os.path.basename(rinex_file), rin_temp + '/' + outfile)
+    else:
+        os.remove(rin_temp + os.path.basename(rinex_file))
+
+print(colored("\nRinex3 files copied and renamed to: %s" % rin_temp, 'blue'))
+
+
+# convert rinex3 to rinex2 files and resample to 30s sampling rate (instead of 1Hz)
+for rinex_file in glob.glob(rin_temp + '*o'):
+    year = '20' + os.path.basename(rinex_file)[-3:-1]
+    if not os.path.exists(gnssir_path + 'data/rinex/' + prefix + '/' + year + '/' + os.path.basename(rinex_file)):
+        print(rinex_file)
+        if not os.path.exists(gnssir_path + 'data/rinex/' + prefix + '/' + year + '/'):
+            os.makedirs(gnssir_path + 'data/rinex/' + prefix + '/' + year + '/', exist_ok=True)
+        subprocess.call(r'gfzrnx -finp ' + rinex_file + ' -vo 2 -smp 30 -fout ' + gnssir_path + 'data/rinex/' + prefix + '/' + year + '/::RX2::')
+
+print(colored("\nRinex3 files converted to rinex2 and moved to yearly (e.g. 2021): %s" % gnssir_path + 'data/rinex/' + prefix + '/' + year + '/', 'blue'))
 
 
 # TODO: convert rin2 to SNR files
@@ -83,4 +112,8 @@ print(colored("\nGFZ rapid orbits renamed and moved to yearly (e.g. 2021): %s" %
 
 
 # TODO: rename, copy GNSS-IR solutions
+
+
+# TODO: put all steps in separate functions
+
 
