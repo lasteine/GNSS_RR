@@ -31,6 +31,7 @@ from termcolor import colored
 import requests
 import zipfile
 import io
+from datetime import date
 
 
 """ Define general functions """
@@ -2049,8 +2050,8 @@ def get_orbits(sp3_outdir, raporbit_path):
         """
 
     # Q: download, unzip, rename rapid orbits (need to match the gnssrefl input format!)
-    # create temporary processing folder in temp orbit dir
-    sp3_tempdir = sp3_outdir + 'processing/'
+    # create temporary preprocessing folder in temp orbit dir
+    sp3_tempdir = sp3_outdir + 'preprocessing/'
     if not os.path.exists(sp3_tempdir):
         os.makedirs(sp3_tempdir, exist_ok=True)
 
@@ -2125,7 +2126,7 @@ def rename_orbits(sp3_tempdir, gnssir_path, sp3_outdir):
         shutil.move(f, sp3_outdir)
     print("original zipped orbit files (.gz) moved to parent dir %s" % sp3_outdir)
 
-    # remove temporary processing directory
+    # remove temporary preprocessing directory
     shutil.rmtree(sp3_tempdir)
 
 

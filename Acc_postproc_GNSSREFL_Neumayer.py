@@ -39,15 +39,17 @@ json = gnssir_path + '/data/input/nmlb.json'                            # path t
 base_name = 'NMLB'                                                      # prefix of base rinex observation files, e.g. station name
 
 
+""" 0. Preprocess data """
 # Q: Prepare GNSS orbit & observation files for 'gnssrefl'
 # download, unzip, rename & move GNSS rapid orbit files
 f.prepare_orbits(sp3_outdir, raporbit_path, gnssir_path)
 
-# copy, rename, convert, move GNSS rinex observation files
+# copy, rename, convert & move GNSS rinex observation files
 year_start, year_end, doy_start, doy_end = f.prepare_obs(dest_path, rin_temp, base_name, gnssir_path)
 
 
-# Q: Run GNSS-IR - needs linux or Mac (now run by bashscript 'run_gnssrefl_ubuntu_sh' on Ubuntu App)
+""" 1. run 'GNSSREFL' automatically (on Linux) """
+# Q: Run GNSS-IR (now run by bashscript 'run_gnssrefl_ubuntu_sh' on Ubuntu App)
 # convert rin2 to SNR files
 # subprocess.call(r'rinex2snr ' + base_name.lower() + ' ' + year_start + ' ' + doy_start + ' -nolook=True -year_end ' + year_end + ' -doy_end ' + doy_end + ' -orb gnss -overwrite=True', shell=True)
 
