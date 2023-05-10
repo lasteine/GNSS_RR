@@ -2,7 +2,14 @@
     Necessary preprocessing for daily file processing with RTKLib
     created by: L. Steiner (Orchid ID: 0000-0002-4958-0849)
     created on: 17.05.2021
-    updated on: 29.09.2021
+    updated on: 10.05.2023
+    
+    requirements:   - install gnssrefl on Linux/Mac (gnssrefl is not working on Windows, see gnssrefl docs)
+                    - gnssrefl (https://github.com/kristinemlarson/gnssrefl)
+                    - gfzrnx (https://dataservices.gfz-potsdam.de/panmetaworks/showshort.php?id=escidoc:1577894)
+                    - wget
+                    - 7zip
+                    - path to all programs added to the system environment variables
 """
 
 import subprocess
@@ -117,8 +124,10 @@ def copy_file_no_overwrite(source_path, dest_path, file_name):
 
     # test if the dest file exists, if false, do the copy, or else abort the copy operation.
     if not os.path.exists(dest_path_file):
+        if not os.path.exists(dest_path):
+            os.makedirs(dest_path, exist_ok=True)
         shutil.copyfile(source_path_file, dest_path_file)
-        print(colored("\ncopy from %s to %s \nok" % (source_path_file, dest_path_file), 'blue'))
+        print("\ncopy from %s to %s \nok" % (source_path_file, dest_path_file))
     else:
         print("\nfile in destination already exists: %s, \ncopy aborted!!!" % dest_path_file)
     pass
@@ -1259,30 +1268,65 @@ def calculate_differences2gnss_15min(emlid, leica, laser):
     return diffs_sh, diffs_swe, laser_15min
 
 
-def calculate_crosscorr(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min):
+def calculate_crosscorr(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min, gnssir_acc=None,
+                        gnssir_acc_daily=None, res='SWE'):
     """ calculate Pearson cross correlation coefficient for daily and 15min resolutions between
         Leica & Emlid GNSS data and manual and laser observations
+    :param gnssir_acc: GNSS reflectometry results, daily resolution
+    :param gnssir_acc_daily: GNSS reflectometry results, 15min resolution
     :param leica_daily: GNSS SWE/SH estimtions from high-end sensor, daily resolution
     :param emlid_daily: GNSS SWE/SH estimtions from low-cost sensor, daily resolution
     :param manual: manual SWE/SH observations, daily resolution
     :param gnss_leica: GNSS SWE/SH estimtions from high-end sensor, 15min resolution
     :param gnss_emlid: GNSS SWE/SH estimtions from low-cost sensor, 15min resolution
     :param laser_15min: SWE/SH observations from laser distance sensor, 15min resolution
-    :return corr_leica_daily, corr_emlid_daily, corr_leica_15min, corr_emlid_15min
+    :param res: type of results ['SWE', 'Acc']
     """
-    # SWE cross correation manual vs. GNSS (daily)
-    corr_leica_daily = manual.SWE_aboveAnt.corr(leica_daily.dswe)
-    corr_emlid_daily = manual.SWE_aboveAnt.corr(emlid_daily.dswe)
-    print('\nPearsons correlation (manual vs. GNSS, daily), Leica: %.2f' % corr_leica_daily)
-    print('Pearsons correlation (manual vs. GNSS, daily), Emlid: %.2f' % corr_emlid_daily)
+    print(colored('\nGNSS reflectometry results: ' + res, 'blue'))
+    if res == 'SWE':
+        # SWE cross correation manual vs. GNSS (daily)
+        corr_leica_daily = manual.SWE_aboveAnt.corr(leica_daily.dswe)
+        corr_emlid_daily = manual.SWE_aboveAnt.corr(emlid_daily.dswe)
+        print('\nPearsons correlation (manual vs. GNSS, daily), Leica: %.2f' % corr_leica_daily)
+        print('Pearsons correlation (manual vs. GNSS, daily), Emlid: %.2f' % corr_emlid_daily)
 
-    # calculate cross correation laser vs. GNSS (15min)
-    corr_leica_15min = laser_15min.dswe.corr(gnss_leica.dswe)
-    corr_emlid_15min = laser_15min.dswe.corr(gnss_emlid.dswe)
-    print('Pearsons correlation (laser vs. GNSS, 15min), Leica: %.2f' % corr_leica_15min)
-    print('Pearsons correlation (laser vs. GNSS, 15min), Emlid: %.2f' % corr_emlid_15min)
+        # calculate SWE cross correation laser vs. GNSS (15min)
+        corr_leica_15min = laser_15min.dswe.corr(gnss_leica.dswe)
+        corr_emlid_15min = laser_15min.dswe.corr(gnss_emlid.dswe)
+        print('Pearsons correlation (laser vs. GNSS, 15min), Leica: %.2f' % corr_leica_15min)
+        print('Pearsons correlation (laser vs. GNSS, 15min), Emlid: %.2f' % corr_emlid_15min)
 
-    return corr_leica_daily, corr_emlid_daily, corr_leica_15min, corr_emlid_15min
+    if res == 'Acc':
+        # Acc cross correation manual vs. GNSS (daily)
+        corr_leica_daily = manual.Acc.corr(leica_daily.dsh)
+        corr_emlid_daily = manual.Acc.corr(emlid_daily.dsh)
+        corr_gnssir_daily = manual.Acc.corr(gnssir_acc_daily)
+        print('\nPearsons correlation (manual vs. GNSS, daily), Leica: %.2f' % corr_leica_daily)
+        print('Pearsons correlation (manual vs. GNSS, daily), Emlid: %.2f' % corr_emlid_daily)
+        print('Pearsons correlation (manual vs. GNSS-R, daily): %.2f' % corr_gnssir_daily)
+
+        # calculate Acc cross correation laser vs. GNSS (15min)
+        corr_leica_15min = laser_15min.dsh.corr(gnss_leica.dsh)
+        corr_emlid_15min = laser_15min.dsh.corr(gnss_emlid.dsh)
+        corr_gnssir_15min = laser_15min.dsh.corr(gnssir_acc)
+        print('Pearsons correlation (laser vs. GNSS, 15min), Leica: %.2f' % corr_leica_15min)
+        print('Pearsons correlation (laser vs. GNSS, 15min), Emlid: %.2f' % corr_emlid_15min)
+        print('Pearsons correlation (laser vs. GNSS-R, 15min): %.2f' % corr_gnssir_15min)
+
+
+def calculate_crosscorr_density(density_leica, density_emlid, manual):
+    """ calculate Pearson cross correlation coefficient for daily and 15min resolutions between
+        Leica & Emlid GNSS data and manual and laser observations
+    :param density_leica: GNSS-RR density estimtions from high-end sensor, daily resolution
+    :param density_emlid: GNSS-RR density estimtions from low-cost sensor, daily resolution
+    :param manual: manual density observations, monthly resolution
+    """
+    print(colored('\nGNSS-RR results', 'blue'))
+    # Acc cross correation manual vs. GNSS (daily)
+    corr_leica_daily = manual.corr(density_leica)
+    corr_emlid_daily = manual.corr(density_emlid)
+    print('\nPearsons correlation (manual vs. GNSS-RR, monthly), Leica: %.2f' % corr_leica_daily)
+    print('Pearsons correlation (manual vs. GNSS-RR, monthly), Emlid: %.2f' % corr_emlid_daily)
 
 
 def calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid, laser_15min):
@@ -1328,34 +1372,129 @@ def calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid
     return predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid
 
 
-def calculate_rmse(diffs_swe_daily, diffs_swe_15min, manual, laser_15min):
+def calculate_linearfit_acc(gnss_leica, laser_15min):
+    """ calculate linear regression coefficients between GNSS-IR and laser accumulation observations
+        :param gnss_leica: GNSS-IR SH estimtions, 15min resolution
+        :param laser_15min: SH observations from laser distance sensor, 15min resolution
+        :return predict_15min
+    """
+    # fit linear regression curve laser vs. GNSS-IR (15min)
+    joined = pd.concat([laser_15min.dsh, gnss_leica], axis=1).dropna()
+    joined.columns = ['dsh_laser', 'dsh_gnssir']
+    joined = joined['2021-12-23':]
+    fit_15min = np.polyfit(joined.dsh_laser, joined.dsh_gnssir, 1)
+    predict_15min = np.poly1d(fit_15min)
+    print('Linear fit (laser vs. GNSS-R, 15min): m = ', round(fit_15min[0], 2), ', b = ', int(fit_15min[1]))
+
+    return predict_15min
+
+
+def calculate_linearfit_density(gnss_leica, gnss_emlid, manual):
+    """ calculate linear regression coefficients between GNSS-RR and manual density observations
+        :param gnss_leica: GNSS-RR density estimtions from high-end system, 15min resolution
+        :param gnss_emlid: GNSS-RR density estimtions from low-cost system, 15min resolution
+        :param manual: manual density observations, monthly resolution
+        :return predict_monthly, predict_monthly_emlid
+    """
+    # fit linear regression curve manual vs. high-end GNSS-RR (monthly)
+    joined = pd.concat([manual.Density_aboveAnt, gnss_leica], axis=1).dropna()
+    joined.columns = ['manual', 'density']
+    joined = joined['2021-12-23':]
+    fit_monthly = np.polyfit(joined.manual, joined.density, 1)
+    predict_monthly = np.poly1d(fit_monthly)
+    print('Linear fit (manual vs. high-end GNSS-RR, monthly): m = ', round(fit_monthly[0], 2), ', b = ',
+          int(fit_monthly[1]))
+
+    # fit linear regression curve manual vs. low-cost GNSS-RR (monthly)
+    joined = pd.concat([manual.Density_aboveAnt, gnss_emlid], axis=1).dropna()
+    joined.columns = ['manual', 'density']
+    joined = joined['2021-12-23':]
+    fit_monthly = np.polyfit(joined.manual, joined.density, 1)
+    predict_monthly_emlid = np.poly1d(fit_monthly)
+    print('Linear fit (manual vs. low-cost GNSS-RR, monthly): m = ', round(fit_monthly[0], 2), ', b = ',
+          int(fit_monthly[1]))
+
+    return predict_monthly, predict_monthly_emlid
+
+
+def calculate_rmse(diffs_daily, diffs_15min, manual, laser_15min, gnssir_acc=None, gnssir_acc_daily=None, res='SWE'):
     """ calculate root-mean-square-error (rmse) and number of samples
-        between GNSS SWE and manual/laser SWE observations
-        :param diffs_swe_daily: differences between reference data and GNSS (Leica), daily resolution
-        :param diffs_swe_15min: differences between reference data and GNSS (Leica), 15min resolution
+        between GNSS SWE/Acc and manual/laser SWE/Acc observations
+        :param diffs_daily: differences between reference data and GNSS (Leica), daily resolution
+        :param diffs_15min: differences between reference data and GNSS (Leica), 15min resolution
+         :param gnssir_acc: GNSS reflectometry results, daily resolution
+        :param gnssir_acc_daily: GNSS reflectometry results, 15min resolution
         :param manual: manual SWE/SH observations, daily resolution
         :param laser_15min: SWE/SH observations from laser distance sensor, 15min resolution
+        :param res: type of results ['SWE', 'Acc']
     """
-    # RMSE
-    rmse_manual = np.sqrt((np.sum(diffs_swe_daily.dswe_manual ** 2)) / len(diffs_swe_daily.dswe_manual))
-    print('\nRMSE (manual vs. GNSS, daily), Leica: %.1f' % rmse_manual)
-    rmse_manual_emlid = np.sqrt(
-        (np.sum(diffs_swe_daily.dswe_manual_emlid ** 2)) / len(diffs_swe_daily.dswe_manual_emlid))
-    print('RMSE (manual vs. GNSS, daily), Emlid: %.1f' % rmse_manual_emlid)
-    rmse_laser = np.sqrt((np.sum(diffs_swe_15min.dswe_laser ** 2)) / len(diffs_swe_15min.dswe_laser))
-    print('RMSE (laser vs. GNSS, 15min), Leica: %.1f' % rmse_laser)
-    rmse_laser_emlid = np.sqrt((np.sum(diffs_swe_15min.dswe_laser_emlid ** 2)) / len(diffs_swe_15min.dswe_laser_emlid))
-    print('RMSE (laser vs. GNSS, 15min), Emlid: %.1f' % rmse_laser_emlid)
+    print(colored('\nGNSS refractometry results: ' + res, 'blue'))
+    if res == 'SWE':
+        # RMSE
+        rmse_manual = np.sqrt((np.sum(diffs_daily.dswe_manual ** 2)) / len(diffs_daily.dswe_manual))
+        print('\nRMSE (manual vs. GNSS, daily), Leica: %.1f' % rmse_manual)
+        rmse_manual_emlid = np.sqrt((np.sum(diffs_daily.dswe_manual_emlid ** 2)) / len(diffs_daily.dswe_manual_emlid))
+        print('RMSE (manual vs. GNSS, daily), Emlid: %.1f' % rmse_manual_emlid)
+        rmse_laser = np.sqrt((np.sum(diffs_15min.dswe_laser ** 2)) / len(diffs_15min.dswe_laser))
+        print('RMSE (laser vs. GNSS, 15min), Leica: %.1f' % rmse_laser)
+        rmse_laser_emlid = np.sqrt((np.sum(diffs_15min.dswe_laser_emlid ** 2)) / len(diffs_15min.dswe_laser_emlid))
+        print('RMSE (laser vs. GNSS, 15min), Emlid: %.1f' % rmse_laser_emlid)
 
-    # Number of samples
-    n_manual = len(diffs_swe_daily.dswe_manual.dropna())
-    print('\nNumber of samples (manual vs. GNSS, daily), Leica: %.0f' % n_manual)
-    n_manual_emlid = len(diffs_swe_daily.dswe_manual_emlid.dropna())
-    print('Number of samples (manual vs. GNSS, daily), Emlid: %.0f' % n_manual_emlid)
-    n_laser = len(diffs_swe_15min.dswe_laser)
-    print('Number of samples (laser vs. GNSS, 15min): %.0f' % n_laser)
-    n_laser_emlid = len(diffs_swe_15min.dswe_laser_emlid)
-    print('Number of samples (laser vs. GNSS, 15min), Emlid: %.0f' % n_laser_emlid)
+        # Number of samples
+        n_manual = len(diffs_daily.dswe_manual.dropna())
+        print('\nNumber of samples (manual vs. GNSS, daily), Leica: %.0f' % n_manual)
+        n_manual_emlid = len(diffs_daily.dswe_manual_emlid.dropna())
+        print('Number of samples (manual vs. GNSS, daily), Emlid: %.0f' % n_manual_emlid)
+        n_laser = len(diffs_15min.dswe_laser)
+        print('Number of samples (laser vs. GNSS, 15min), Leica: %.0f' % n_laser)
+        n_laser_emlid = len(diffs_15min.dswe_laser_emlid)
+        print('Number of samples (laser vs. GNSS, 15min), Emlid: %.0f' % n_laser_emlid)
+    if res == 'Acc':
+        # RMSE
+        rmse_manual = np.sqrt((np.sum(diffs_daily.dsh_manual ** 2)) / len(diffs_daily.dsh_manual))
+        print('\nRMSE (manual vs. GNSS, daily), Leica: %.1f' % rmse_manual)
+        rmse_manual_emlid = np.sqrt((np.sum(diffs_daily.dsh_manual_emlid ** 2)) / len(diffs_daily.dsh_manual_emlid))
+        print('RMSE (manual vs. GNSS, daily), Emlid: %.1f' % rmse_manual_emlid)
+        rmse_laser = np.sqrt((np.sum(diffs_15min.dsh_laser ** 2)) / len(diffs_15min.dsh_laser))
+        print('RMSE (laser vs. GNSS, 15min), Leica: %.1f' % rmse_laser)
+        rmse_laser_emlid = np.sqrt((np.sum(diffs_15min.dsh_laser_emlid ** 2)) / len(diffs_15min.dsh_laser_emlid))
+        print('RMSE (laser vs. GNSS, 15min), Emlid: %.1f' % rmse_laser_emlid)
+
+        # GNSS-IR vs. manual
+        diff_gnssir_manual = (manual.Acc - gnssir_acc_daily).dropna()
+        rmse_manual_gnssir = np.sqrt((np.sum(diff_gnssir_manual ** 2)) / len(diff_gnssir_manual))
+        print('RMSE (manual vs. GNSS-R, daily): %.1f' % rmse_manual_gnssir)
+
+        # GNSS-IR vs. laser
+        diff_gnssir_laser = (laser_15min.dsh - gnssir_acc).dropna()
+        rmse_laser_gnssir = np.sqrt((np .sum(diff_gnssir_laser ** 2)) / len(diff_gnssir_laser))
+        print('RMSE (laser vs. GNSS-R, 15min): %.1f' % rmse_laser_gnssir)
+
+        # Number of GNSS-IR samples
+        print('\nNumber of samples (manual vs. GNSS-R, daily): %.0f' % len(diff_gnssir_manual))
+        print('Number of samples (laser vs. GNSS-R, 15min): %.0f' % len(diff_gnssir_laser))
+
+
+def calculate_rmse_density(density_leica, density_emlid, manual):
+    """ calculate root-mean-square-error (rmse) and number of samples
+        between GNSS SWE/Acc and manual/laser SWE/Acc observations
+        :param density_leica: GNSS-RR density estimtions from high-end system, 15min resolution
+        :param density_emlid: GNSS-RR density estimtions from low-cost system, 15min resolution
+        :param manual: manual density observations, monthly resolution
+    """
+    print(colored('\nGNSS-RR results', 'blue'))
+    # RMSE
+    diff_density_manual = (manual - density_leica).dropna()
+    rmse_manual_density = np.sqrt((np.sum(diff_density_manual ** 2)) / len(diff_density_manual))
+    print('Density RMSE (manual vs. GNSS-RR, monthly), Leica: %.1f' % rmse_manual_density)
+
+    diff_density_manual_emlid = (manual - density_emlid).dropna()
+    rmse_manual_density_emlid = np.sqrt((np.sum(diff_density_manual_emlid ** 2)) / len(diff_density_manual_emlid))
+    print('Density RMSE (manual vs. GNSS-RR, monthly), Emlid: %.1f' % rmse_manual_density_emlid)
+
+    # Number of GNSS-IR samples
+    print('\nNumber of samples (manual vs. GNSS-RR, monthly), Leica: %.0f' % len(diff_density_manual))
+    print('Number of samples (manual vs. GNSS-RR, monthly), Emlid: %.0f' % len(diff_density_manual_emlid))
 
 
 """ Define plot functions """
@@ -1415,24 +1554,29 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     plt.close()
     plt.figure()
     if leica is not None:
-        leica.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
+        leica.plot(linestyle='-', color='k', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
     if emlid is not None:
         emlid.plot(color='salmon', linestyle='--')
     if manual is not None:
-        manual.SWE_aboveAnt.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
-        plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k',
+        manual.SWE_aboveAnt.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+        plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='darkblue',
                      linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
-        laser.dswe.dropna().plot(color='k', linestyle='--', label='Accumulation (cm)').grid()
+        laser.dswe.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
     if buoy is not None:
-        plt.plot(buoy[['dswe1', 'dswe2', 'dswe3', 'dswe4']], color='lightgrey', linestyle='-')
+        plt.plot(buoy[['dswe1', 'dswe2', 'dswe3', 'dswe4']], color='lightgrey', linestyle='-', alpha=0.8)
     if poles is not None:
         plt.plot(poles[['dswe1', 'dswe2', 'dswe3', 'dswe4', 'dswe5', 'dswe6', 'dswe7', 'dswe8', 'dswe9', 'dswe10',
-                        'dswe11', 'dswe12', 'dswe13', 'dswe14', 'dswe15', 'dswe16']], linestyle=':', alpha=0.6)
+                        'dswe11', 'dswe12', 'dswe13', 'dswe14', 'dswe15', 'dswe16']], linestyle=':', alpha=0.4)
     if std_leica is not None:
         plt.fill_between(leica.index, leica - std_leica, leica + std_leica, color="crimson", alpha=0.2)
     if std_emlid is not None:
         plt.fill_between(emlid.index, emlid - std_emlid, emlid + std_emlid, color="salmon", alpha=0.2)
+
+    laser.dswe.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+    manual.SWE_aboveAnt.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+    plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='darkblue',
+                 linestyle='', capsize=4, alpha=0.5)
 
     plt.xlabel(None)
     plt.ylabel('SWE (mm w.e.)', fontsize=14)
@@ -1463,11 +1607,12 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
     plt.figure()
     diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
     if manual is not None:
-        diffs_swe.dswe_manual.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
-        plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='k',
+        diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+        plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10,
+                     color='darkblue',
                      linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
-        diffs_swe.dswe_laser.dropna().plot(color='k', linestyle='--', label='Accumulation (cm)').grid()
+        diffs_swe.dswe_laser.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
     if buoy is not None:
         plt.plot(diffs_swe[['dswe_buoy1', 'dswe_buoy2', 'dswe_buoy3', 'dswe_buoy4']], color='lightgrey', linestyle='-')
     if poles is not None:
@@ -1475,6 +1620,11 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
                      ['dswe_pole1', 'dswe_pole2', 'dswe_pole3', 'dswe_pole4', 'dswe_pole5', 'dswe_pole6', 'dswe_pole7',
                       'dswe_pole8', 'dswe_pole9', 'dswe_pole10', 'dswe_pole11', 'dswe_pole12', 'dswe_pole13',
                       'dswe_pole14', 'dswe_pole15', 'dswe_pole16']].dropna(), linestyle=':', alpha=0.6)
+
+    diffs_swe.dswe_laser.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+    diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+    plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='darkblue',
+                 linestyle='', capsize=4, alpha=0.5)
 
     plt.xlabel(None)
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
@@ -1523,6 +1673,64 @@ def plot_scatter(data_path, y_leica, y_emlid, x_value, predict_daily=None, predi
     if save is True:
         plt.savefig(data_path + '/30_plots/scatter_SWE_' + x_label + '.png', bbox_inches='tight')
         plt.savefig(data_path + '/30_plots/scatter_SWE_' + x_label + '.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_scatter_acc(data_path, y_leica, x_value, predict_daily=None, x_label='Manual',
+                 lim=(-100, 600), save=[False, True]):
+    plt.close()
+    plt.figure()
+    leica_x = pd.concat([y_leica, x_value], axis=1)
+    leica_x.columns = ['dsh_y', 'dsh_x']
+    ax = leica_x.plot.scatter(x='dsh_x', y='dsh_y', color='steelblue')
+    if predict_daily is not None:
+        plt.plot(range(15, 130), predict_daily(range(15, 130)), c='steelblue', linestyle='-',
+                 alpha=0.7)  # linear regression leica
+    ax.set_ylabel('GNSS accumulation (cm)', fontsize=14)
+    ax.set_ylim(lim)
+    ax.set_xlim(lim)
+    ax.set_xlabel(x_label + ' accumulation (cm)', fontsize=14)
+    plt.legend(['GNSS-Reflectometry'], fontsize=12, loc='upper left')
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.grid()
+    if save is True:
+        plt.savefig(data_path + '/30_plots/scatter_acc_' + x_label + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/scatter_acc_' + x_label + '.pdf', bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_scatter_density(data_path, y_leica, y_emlid, x_value, predict_daily=None, predict_emlid_daily=None, x_label='Manual',
+                 lim=(-100, 600), save=[False, True]):
+    plt.close()
+    plt.figure()
+    leica_x = pd.concat([y_leica, x_value], axis=1)
+    leica_x.columns = ['dswe_y', 'dswe_x']
+    emlid_x = pd.concat([y_emlid, x_value], axis=1)
+    emlid_x.columns = ['dswe_y', 'dswe_x']
+    ax = leica_x.plot.scatter(x='dswe_x', y='dswe_y', color='k')
+    emlid_x.plot.scatter(x='dswe_x', y='dswe_y', color='salmon', ax=ax)
+    if predict_daily is not None:
+        plt.plot(range(320, 550), predict_daily(range(320, 550)), c='k', linestyle='--',
+                 alpha=0.7)  # linear regression leica
+    if predict_emlid_daily is not None:
+        plt.plot(range(320, 550), predict_emlid_daily(range(320, 550)), c='salmon', linestyle='-.',
+                 alpha=0.7)  # linear regression emlid
+    ax.set_ylabel('GNSS-RR density (kg/m3)', fontsize=14)
+    ax.set_ylim(lim)
+    ax.set_xlim(lim)
+    ax.set_xlabel(x_label + ' density (kg/m3)', fontsize=14)
+    plt.legend(['High-end GNSS', 'Low-cost GNSS'], fontsize=12, loc='upper right')
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.grid()
+    if save is True:
+        plt.savefig(data_path + '/30_plots/scatter_density_' + x_label + '.png', bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/scatter_density_' + x_label + '.pdf', bbox_inches='tight')
     else:
         plt.show()
 
@@ -1609,6 +1817,60 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
 
     plt.xlabel(None)
     plt.ylabel('ΔSnow accumulation (mm)', fontsize=14)
+    plt.legend(leg, fontsize=12, loc='upper left')
+    plt.xlim(x_lim)
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    if save is True:
+        plt.savefig(data_path + '/30_plots/deltaAcc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[
+                                                                                       -2:] + suffix + '.png',
+                    bbox_inches='tight')
+        plt.savefig(data_path + '/30_plots/deltaAcc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[
+                                                                                       -2:] + suffix + '.pdf',
+                    bbox_inches='tight')
+    else:
+        plt.show()
+
+
+def plot_all_diffAcc_gnssir(data_path, manual=None, laser=None, buoy=None, poles=None, gnssir_acc_daily=None,
+                            save=[False, True],
+                            suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=(-400, 1000),
+                            x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
+    """ Plot SWE (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
+    """
+    plt.close()
+    plt.figure()
+
+    # differences
+    diff_laser = (laser.dsh - gnssir_acc_daily).dropna()
+    diff_manual = (manual.Acc - gnssir_acc_daily).dropna()
+    diff_buoy = (buoy[['dsh1', 'dsh2', 'dsh3', 'dsh4']].subtract(gnssir_acc_daily, axis='index')).dropna()
+    diff_poles = (
+    poles[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']].subtract(
+        gnssir_acc_daily, axis='index')).dropna()
+
+    # plot
+    if laser is not None:
+        diff_laser.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)', fontsize=12,
+                                 figsize=(6, 5.5), ylim=y_lim).grid()
+    if manual is not None:
+        diff_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+        plt.errorbar(diff_manual.index, diff_manual, yerr=diff_manual / 10, color='darkblue',
+                     linestyle='', capsize=4, alpha=0.5)
+    if buoy is not None:
+        plt.plot(diff_buoy, color='lightgrey', linestyle='-', alpha=0.8)
+    if poles is not None:
+        plt.plot(diff_poles, linestyle=':', alpha=0.6)
+
+    diff_laser.dropna().plot(color='darkblue', linestyle='-.')
+    diff_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+    plt.errorbar(diff_manual.index, diff_manual, yerr=diff_manual / 10, color='darkblue',
+                 linestyle='', capsize=4, alpha=0.5)
+
+    plt.xlabel(None)
+    plt.ylabel('ΔSnow accumulation (cm)', fontsize=14)
     plt.legend(leg, fontsize=12, loc='upper left')
     plt.xlim(x_lim)
     plt.gca().xaxis.set_major_locator(MonthLocator())
@@ -1757,6 +2019,187 @@ def plot_PPP_solution(dest_path, receiver, df_ppp=None, save=[False, True], suff
 
     return df_ppp
 
+# -------------------- GNSS Reflectometry functions ------------------------------------------
+
+
+def prepare_orbits(sp3_outdir, raporbit_path, gnssir_path):
+    """ Download, unzip, rename & rapid move orbits (need to match the gnssrefl input format!)
+        :param sp3_outdir: Temporary output directory to store & convert downloaded orbit files
+        :param raporbit_path: GFZ data server from where GNSS rapid orbits are downloaded
+        :param gnssir_path: output directory for gnssrefl input (yearly directories)
+
+    """
+    # Q: download rapid orbits
+    sp3_tempdir = get_orbits(sp3_outdir, raporbit_path)
+
+    # Q: unzip orbits
+    unzip_orbits(sp3_tempdir)
+
+    # Q: rename orbit files (need to match the gnssrefl input name format!)
+    rename_orbits(sp3_tempdir, gnssir_path)
+
+
+def get_orbits(sp3_outdir, raporbit_path):
+    """ Download, uzip, rename rapid orbits from GFZ Data Server: 'ftp://isdcftp.gfz-potsdam.de/gnss/products/rapid/w????/*.SP3*'
+        (???? = gpsweek, sample sp3 = 'GFZ0OPSRAP_20230930000_01D_05M_ORB.SP3.gz')
+        example orbit file: 'GFZ0OPSRAP_20231190000_01D_05M_ORB.SP3.gz'
+        :param sp3_outdir: Temporary output directory to store & convert downloaded orbit files
+        :param raporbit_path: GFZ data server from where GNSS rapid orbits are downloaded
+        :return: sp3_tempdir
+        """
+
+    # Q: download, unzip, rename rapid orbits (need to match the gnssrefl input format!)
+    # create temporary processing folder in temp orbit dir
+    sp3_tempdir = sp3_outdir + 'processing/'
+    if not os.path.exists(sp3_tempdir):
+        os.makedirs(sp3_tempdir, exist_ok=True)
+
+    # get the newest year, doy from orbit file from temp orbit dir
+    yeardoy_newest = sorted(glob.glob(sp3_outdir + '*.gz'), reverse=True)[0].split('_')[1]
+    year_newest = int(yeardoy_newest[:4])
+    doy_newest = int(yeardoy_newest[4:7])
+
+    # convert to gpsweek and day of week (dow)
+    gpsweek_newest, dow_newest = gnsscal.yrdoy2gpswd(year_newest, doy_newest)
+
+    # convert today to gpsweek and day of week (dow)
+    gpsweek_today, dow_today = gnsscal.date2gpswd(date.today())
+
+    # define ftp subdirectories to download newly available orbit files
+    gpsweek_list = list(range(gpsweek_newest, gpsweek_today + 1, 1))
+
+    for gpswk in gpsweek_list:
+        download_path = raporbit_path + 'w' + str(gpswk) + '/'
+        # download all .SP3 rapid orbits from ftp server's subfolders
+        subprocess.call('wget -r -np -nc -nH --cut-dirs=4 -A .SP3.gz ' + download_path + ' -P ' + sp3_tempdir)
+
+    print(colored("\nGFZ rapid orbits downloaded to: %s" % sp3_outdir, 'blue'))
+
+    return sp3_tempdir
+
+
+def unzip_orbits(sp3_tempdir):
+    """ Unzip all orbit files in the temporary orbit processing directory
+        example from orbit file: 'GFZ0OPSRAP_20231190000_01D_05M_ORB.SP3.gz' to '_GFZ0OPSRAP_20231190000_01D_05M_ORB.SP3'
+        :param sp3_tempdir: temporary orbit processing directory
+        """
+    # unzip all files
+    subprocess.call(r'7z e -y ' + sp3_tempdir + ' -o' + sp3_tempdir)
+    print(colored("\nGFZ rapid orbits unzipped", 'blue'))
+
+
+def rename_orbits(sp3_tempdir, gnssir_path, sp3_outdir):
+    """ Rename & move orbit files (need to match the gnssrefl input name format!)
+        example from 'GFZ0OPSRAP_20231190000_01D_05M_ORB.SP3' to 'GFZ0MGXRAP_20231190000_01D_05M_ORB.SP3'
+        :param sp3_tempdir: temporary orbit processing directory
+        :param gnssir_path: output directory for gnssrefl input (yearly directories)
+        :param sp3_outdir: temporary output directory to store & convert downloaded orbit files
+    """
+    # rename & move extracted orbits to match the gfzrnx input format
+    for orbit_file in glob.glob(sp3_tempdir + '*.SP3'):
+        # define input and output filename
+        infile = os.path.basename(orbit_file)
+        outfile = infile[1:5] + 'MGX' + infile[8:]
+        print('\nrename orbit file from: ', infile, ' to: ', outfile)
+
+        # rename the file
+        os.rename(orbit_file, os.path.dirname(orbit_file) + '/' + outfile)
+
+        # define dest dir
+        year = outfile.split('_')[1][:4]
+        dest_dir = gnssir_path + 'data/' + year + '/sp3/'
+
+        # move file to data directory for gnssrefl if it does not already exist
+        if not os.path.exists(dest_dir + outfile):
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir, exist_ok=True)
+            shutil.move(os.path.dirname(orbit_file) + '/' + outfile, dest_dir)
+            print("orbit file moved to yearly sp3 dir %s" % dest_dir)
+        else:
+            os.remove(os.path.dirname(orbit_file) + '/' + outfile)
+            print("file in destination already exists, move aborted, file removed")
+    print(colored("\nGFZ rapid orbits renamed and moved to yearly (e.g. 2021): %s" % dest_dir, 'blue'))
+
+    # move zipped original orbit files (.gz) to parent dir
+    for f in glob.iglob(sp3_tempdir + '*.gz', recursive=True):
+        shutil.move(f, sp3_outdir)
+    print("original zipped orbit files (.gz) moved to parent dir %s" % sp3_outdir)
+
+    # remove temporary processing directory
+    shutil.rmtree(sp3_tempdir)
+
+
+def prepare_obs(dest_path, rin_temp, base_name, gnssir_path):
+    """ copy, rename, convert, move rinex files
+        :param rin_temp: temporary rinex processing folder
+        :param dest_path: data destination path for python processing
+        :param base_name: prefix of base rinex observation files, e.g. station name ('NMLB')
+        :param gnssir_path: gnssrefl processing folder
+        :return: year_start, year_end, doy_start, doy_end
+    """
+    # Q: copy & rename base rinex observations to temporary directory
+    copy_obs(dest_path, rin_temp, base_name)
+
+    # Q: Convert rinex3 to rinex2 files and resample to 30s sampling rate (instead of 1Hz)
+    year_start, year_end, doy_start, doy_end = conv_obs(rin_temp, gnssir_path, base_name)
+
+    return year_start, year_end, doy_start, doy_end
+
+
+def copy_obs(dest_path, rin_temp, base_name):
+    """ copy & rename base rinex observations to temporary directory
+        :param rin_temp: temporary rinex processing folder
+        :param dest_path: data destination path for python processing
+        :param base_name: prefix of base rinex observation files, e.g. station name ('NMLB')
+    """
+    for rinex_file in sorted(glob.glob(dest_path + '3387*0.*[olng]'), reverse=True):
+        # copy base rinex obs [o] and nav [lng] files
+        copy_file_no_overwrite(dest_path, rin_temp, os.path.basename(rinex_file))
+
+        # rename base rinex files if not exist
+        outfile = base_name.lower() + os.path.basename(rinex_file)[4:]
+        if not os.path.exists(rin_temp + '/' + outfile):
+            print('rename file')
+            os.rename(rin_temp + os.path.basename(rinex_file), rin_temp + '/' + outfile)
+        else:
+            os.remove(rin_temp + os.path.basename(rinex_file))
+
+    print(colored("\nRinex3 files copied and renamed to: %s" % rin_temp, 'blue'))
+
+
+def conv_obs(rin_temp, gnssir_path, base_name):
+    """ Convert rinex3 to rinex2 files and resample to 30s sampling rate (instead of 1Hz) & get
+        start/end year, doy from newly downloaded files (to not process older files again)
+        :param rin_temp: temporary rinex processing folder
+        :param gnssir_path: gnssrefl processing folder
+        :param base_name: prefix of base rinex observation files, e.g. station name ('NMLB')
+        :return: year_start, year_end, doy_start, doy_end
+    """
+    doy = []
+    for rinex_file in sorted(glob.glob(rin_temp + '*o'), reverse=True):
+        year = '20' + os.path.basename(rinex_file)[-3:-1]
+        doy_new = os.path.basename(rinex_file).split('.')[0][-4:-1]
+        doy.append(doy_new)
+        if not os.path.exists(
+                gnssir_path + 'data/rinex/' + base_name.lower() + '/' + year + '/' + os.path.basename(rinex_file)):
+            print(rinex_file)
+            if not os.path.exists(gnssir_path + 'data/rinex/' + base_name.lower() + '/' + year + '/'):
+                os.makedirs(gnssir_path + 'data/rinex/' + base_name.lower() + '/' + year + '/', exist_ok=True)
+            subprocess.call(
+                r'gfzrnx -finp ' + rinex_file + ' -vo 2 -smp 30 -fout ' + gnssir_path + 'data/rinex/' + base_name.lower() + '/' + year + '/::RX2::')
+
+    print(colored(
+        "\nRinex3 files converted to rinex2 and moved to yearly (e.g. 2021): %s" % gnssir_path + 'data/rinex/' + base_name.lower() + '/' + year + '/',
+        'blue'))
+
+    # return start and end year, doy for GNSS-IR processing
+    year_start = year[-1]  # '2021'
+    doy_start = doy[-1]  # '330'
+    year_end = year[0]
+    doy_end = doy[0]
+
+    return year_start, year_end, doy_start, doy_end
+
 
 def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', copy=False, pickle='nmlb'):
     """ Plot GNSS interferometric reflectometry (GNSS-IR) accumulation results from the high-end base station
@@ -1783,6 +2226,15 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', copy=False, pickle='
                     file = os.path.basename(f)
                     # skip files of 2021 before 26th nov (no gps data before installation)
                     if not os.path.exists(loc_gnssir_dir + file):
+                        # check if the name of the solution file begins with the year
+                        if file[:4] == year:
+                            print(file)
+                        else:
+                            # rename GNSS-IR solution files from doy.txt to year_nmlbdoy.txt
+                            os.rename(f, ubuntu_path + year + '/results/' + base_name.lower() + '/' + year + '_' + base_name.lower() + file)
+                            print("\nGNSS-IR solution files renamed from %s to %s" % (file, year + '_' + base_name.lower() + file))
+
+                        # copy the files
                         shutil.copy2(f, loc_gnssir_dir)
                         print("file copied from %s to %s" % (f, loc_gnssir_dir))
                     else:
@@ -1968,13 +2420,76 @@ def plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, l
 
     plt.close()
 
+
+def plot_all_Acc_gnssir(data_path, leica=None, emlid=None, manual=None, laser=None, buoy=None, poles=None,
+                        gnssir_acc=None, gnssir_acc_daily=None, save=[False, True],
+                        suffix='', leg=['High-end GNSS', 'Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=(-200, 1400),
+                        x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
+    """ Plot Accumulation (Leica, emlid) time series with reference data (laser, buoy, poles) and error bars
+    """
+    plt.close()
+    plt.figure()
+    if leica is not None:
+        leica.dsh.plot(linestyle='-', color='crimson', fontsize=12, figsize=(6, 5.5), ylim=y_lim, x_compat=True).grid()
+    if leica is None:
+        if gnssir_acc is not None:
+            gnssir_acc.plot(linestyle='-', color='steelblue', alpha=0.4, fontsize=12, figsize=(6, 5.5), ylim=y_lim,
+                            x_compat=True).grid()
+        if manual is not None:
+            manual.Acc.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1, fontsize=12,
+                            figsize=(6, 5.5), ylim=y_lim, x_compat=True).grid()
+            plt.errorbar(manual.Acc.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4,
+                         alpha=0.5)
+        else:
+            print(colored('Please provide a reference for the figure', 'red'))
+
+    if emlid is not None:
+        emlid.dsh.plot(color='salmon', linestyle='--')
+    if manual is not None:
+        manual.Acc.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
+        plt.errorbar(manual.Acc.index, manual.Acc, yerr=manual.Acc / 10, color='darkblue', linestyle='', capsize=4,
+                     alpha=0.5)
+    if laser is not None:
+        laser.dsh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+
+    if gnssir_acc_daily is not None:
+        gnssir_acc_daily.dropna().plot(color='steelblue').grid()
+
+    if buoy is not None:
+        plt.plot(buoy[['dsh1', 'dsh2', 'dsh3', 'dsh4']], color='lightgrey', linestyle='-', alpha=0.8)
+    if poles is not None:
+        plt.plot(poles[['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']],
+                 linestyle=':', alpha=0.6)
+
+    if laser is not None:
+        laser.dsh.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
+
+    plt.xlabel(None)
+    plt.ylabel('Snow accumulation (cm)', fontsize=14)
+    plt.legend(leg, fontsize=12, loc='upper left')
+    plt.xlim(x_lim)
+    plt.gca().xaxis.set_major_locator(MonthLocator())
+    plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    if save is True:
+        plt.savefig(
+            data_path + '/30_plots/Acc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.png',
+            bbox_inches='tight')
+        plt.savefig(
+            data_path + '/30_plots/Acc_all_' + str(x_lim[0].year) + '_' + str(x_lim[1].year)[-2:] + suffix + '.pdf',
+            bbox_inches='tight')
+    else:
+        plt.show()
+
+
 def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=None, leg=['High-end GNSS-RR', 'Manual'], save=False, suffix='', x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Plot derived density timeseries from GNSS reflectometry based accumulation and GNSS-refractometry based SWE """
 
     # plot density (all data & resampled median per day)
     plt.close()
     if density_leica is not None:
-        density_leica.plot(color='crimson', linestyle='-', ylim=(-1, 1000), fontsize=12, xlim=x_lim, figsize=(6, 5.5)).grid()
+        density_leica.plot(color='k', linestyle='-', ylim=(-1, 1000), fontsize=12, xlim=x_lim, figsize=(6, 5.5)).grid()
     else:
         if density_emlid is not None:
             density_emlid.plot(color='salmon', linestyle='--', ylim=(-1, 1000), fontsize=12, xlim=x_lim, figsize=(6, 5.5)).grid()
@@ -1987,10 +2502,10 @@ def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=Non
     # plot manual density data & error
     if manual is not None:
         # plot density of layers above antenna
-        manual.Density_aboveAnt.plot(color='k', linestyle=' ', marker='*', markersize=8, markeredgewidth=1,
+        manual.Density_aboveAnt.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1,
                                      label='Manual').grid()
         plt.errorbar(manual.Density_aboveAnt.index, manual.Density_aboveAnt, yerr=manual.Density_aboveAnt / 10,
-                     color='k', linestyle='', capsize=4,
+                     color='darkblue', linestyle='', capsize=4,
                      alpha=0.8)
         # # plot density of upper 1m layer
         # manual.Density.plot(color='k', linestyle=' ', marker='o', markersize=4, markeredgewidth=1,
