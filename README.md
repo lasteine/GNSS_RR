@@ -1,12 +1,15 @@
 # GNSS_RR
-Continuous estimation of in-situ snow/firn accumulation, snow water equivalent (snow mass), and snow/firn density on a fast-moving surface (ice shelf) using combined Global Navigation Satellite System (GNSS) reflectometry/refractometry (GNSS-RR)}
+Continuous estimation of in-situ snow/firn accumulation, snow water equivalent (snow mass), and snow/firn density 
+on a fast-moving surface (ice shelf) using combined Global Navigation Satellite System (GNSS) reflectometry/refractometry (GNSS-RR)}
 
 
 In case of a moving ground surface such as an ice shelf or glacier, the GNSS base and rover need to be physically (mechanically) connected 
-to each other to enable a stable GNSS baseline, especially in the height component. Otherwise, it is not possible to separate the snow induced effect from the station height movement!
+to each other to enable a stable GNSS baseline, especially in the height component. Otherwise, it is not possible to separate 
+the snow induced effect from the station height movement!
 
 Snow accumulation is estimated using GNSS interferometric reflectometry (GNSS-IR) and the open-source "gnssrefl" software on Linux. 
-A high-end receiver is used in the field setup, connected to a high-end multi-frequency and multi-GNSS antenna. The GNSS base receiver logged multi-GNSS RINEX data with a 1s sampling rate.
+A high-end receiver is used in the field setup, connected to a high-end multi-frequency and multi-GNSS antenna. The GNSS base 
+receiver logged multi-GNSS RINEX data with a 1s sampling rate.
 
 Snow water equivalent (SWE) is estimated using GNSS refractometry based on the biased up-component and post processing on Windows. 
 The biased up-component of a short GNSS baseline between a base antenna (mounted on a pole) and a rover antenna (mounted underneath the snowpack) 
@@ -17,7 +20,8 @@ Snow density is derived by combining the results (accumulation and SWE) from bot
 
 
 
-A gnssrefl and a RTKLIB configuration file are attached, which are used in Steiner et al. (2023). By now, the processing is run using three individual bash scripts as all code was coded on Windows, but the gnssrefl software only runs on Linux (or Apple).
+A gnssrefl and a RTKLIB configuration file are attached, which are used in Steiner et al. (2023). 
+By now, the processing is run using three individual bash scripts as all code was coded on Windows, but the gnssrefl software only runs on Linux (or Apple).
 The scripts should be executed one after the other (at the earliest when the previous script finished):
 
 1. automate_Acc_preprocess.sh (on Windows)
@@ -27,9 +31,10 @@ The scripts should be executed one after the other (at the earliest when the pre
    runs "gnssrefl" by first converting all GNSS rinex files to column-based SNR files needed as input for then running the GNSS-IR processing.
 
 3. automate_SWE_Acc_density.sh (on Windows)
-   runs a python script which does all the rest. Data paths need to be defined here. The python script contains the workflow from definition of data paths, preprocessing of data, "RTKLIB" post processing of daily GNSS RINEX files 
-   to filtered and plotted snow accumulation, SWE, and density timeseries. GNSS-IR results are copied from the Linux folder and combined with the GNSS refractometry results to output density time series. Reference data
-   from available ground truth sensors are automatically copied or downloaded for comparison.
+   runs a python script which does all the rest. Data paths need to be defined here. The python script contains the workflow from definition 
+   of data paths, preprocessing of data, "RTKLIB" post processing of daily GNSS RINEX files to filtered and plotted snow accumulation, SWE, and 
+   density timeseries. GNSS-IR results are copied from the Linux folder and combined with the GNSS refractometry results to output density time series. 
+   Reference data from available ground truth sensors are automatically copied or downloaded for comparison.
 
 
 
