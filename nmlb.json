@@ -1,0 +1,69 @@
+{
+    "station": "nmlb",
+    "lat": -70.67731419398947,
+    "lon": -8.281190041634853,
+    "ht": 56.28856752067804,
+    "minH": 2,
+    "maxH": 8,
+    "e1": 5,
+    "e2": 30,
+    "NReg": [
+        1.0,
+        4.0
+    ],
+    "PkNoise": 2.7,
+    "polyV": 4,
+    "pele": [
+        5,
+        30
+    ],
+    "ediff": 2,
+    "desiredP": 0.005,
+    "azval": [
+        0,
+        90,
+        90,
+        180,
+        180,
+        270,
+        270,
+        360
+    ],
+    "freqs": [
+        1,
+        20,
+        5,
+        101,
+        102,
+        201,
+        205,
+        206,
+        207,
+        208,
+        302,
+        306
+    ],
+    "reqAmp": [
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0
+    ],
+    "refraction": true,
+    "overwriteResults": true,
+    "seekRinex": false,
+    "wantCompression": false,
+    "plt_screen": false,
+    "onesat": null,
+    "screenstats": false,
+    "pltname": "nmlb_lsp.png",
+    "delTmax": 75
+}
