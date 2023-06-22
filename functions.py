@@ -516,11 +516,7 @@ def get_sol_yeardoy(dest_path, resolution):
     start_doy_emlid = int(name_max_emlid[-3:]) + 1
     start_date_emlid = gnsscal.yrdoy2date(int('20' + start_yy_emlid), start_doy_emlid)
     start_mjd_emlid = jdcal.gcal2jd(start_date_emlid.year, start_date_emlid.month, start_date_emlid.day)[1]
-<<<<<<< HEAD
     print(colored('start year %s, doy %s, mjd %s, date %s for further processing of Emlid Rover' % (
-=======
-    print(colored('start year %s, doy %s, mjd %s, date %s for further processing of Leica Rover' % (
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     start_yy_emlid, start_doy_emlid, start_mjd_emlid, start_date_emlid), 'blue'))
 
     return start_yy, start_mjd, start_mjd_emlid
@@ -688,12 +684,7 @@ def get_rtklib_solutions(dest_path, rover_name, resolution, ending, header_lengt
     return df_enu
 
 
-<<<<<<< HEAD
 def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity=[1, 2, 5], threshold=2, window='D', ending=''):
-=======
-def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity=[1, 2, 5], ti_set_swe2zero=12,
-                            threshold=3, window='D', resample=[True, False], resample_resolution='30min', ending=''):
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     """ filter and clean ENU solution data (outlier filtering, median filtering, adjustments for observation mast heightening)
     :param dest_path: path to GNSS rinex observation and navigation data, and rtkpost configuration file
     :param df_enu: pandas dataframe containing all seasons solution data columns ['date', 'time', 'U (m)', 'amb_state', 'nr_sat', 'std_u (m)']
@@ -713,36 +704,10 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity
     fil_df = pd.DataFrame(df_enu[(df_enu.amb_state == ambiguity)])
     fil_df.index = pd.DatetimeIndex(fil_df.index)
     fil_df = fil_df.sort_index()
-<<<<<<< HEAD
     u = fil_df.U * 1000     # convert up (swe) component to mm
-=======
 
-    # adapt up values to reference SWE values in mm (median of first hours)
-    swe_zero = int((60 / int(resolution[:2])) * ti_set_swe2zero)  # get number of observations to use to set swe to zero
-    fil = (fil_df.U - fil_df.U[:swe_zero].median()) * 1000
-
-    # Q: remove outliers based on x*sigma threshold
-    print('\nremove outliers based on %s * sigma threshold' % threshold)
-    upper_limit = fil.median() + threshold * fil.std()
-    lower_limit = fil.median() - threshold * fil.std()
-    fil_clean = fil[(fil > lower_limit) & (fil < upper_limit)]
-
-    # Q: filter data with a rolling median and, if necessary, resample resolution to fit reference data resolution
-    if resample is True:
-        print(
-            '\ndata is median filtered (window length = %s) and resampled to %s resolution' % window % resample_resolution)
-        resolution = resample_resolution
-        m = fil_clean.rolling(window).median().resample(resample_resolution).median()
-    else:
-        print('\ndata is median filtered with window length: %s' % window)
-        m = fil_clean.rolling(window).median()
-    s = fil_clean.rolling(window).std()
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
-
-    # outlier = (m.diff() > 1000)
     # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
     print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
-<<<<<<< HEAD
     jump = u[(u.diff() < -1000)]
 
     # get value of jump difference (of values directly after - before jump)
@@ -755,16 +720,6 @@ def filter_rtklib_solutions(dest_path, rover_name, resolution, df_enu, ambiguity
         u = pd.concat([u[~(u.index >= jump.index.format()[0])],
                        adj])  # concatenate all original obs before jump with adjusted values after jump
         jump = u[(u.diff() < -1000)]
-=======
-    jump = m[(m.diff() < -1000)]
-    print(jump)
-
-    while jump.empty is False:
-        print('\njump of height %s is detected! at %s' % (jump.iloc[0], jump.index.format()[0]))
-        adj = m[(m.index >= jump.index.format()[0])] - jump.iloc[0]  # correct all observations after jump [0]
-        m = pd.concat([m[~(m.index >= jump.index.format()[0])], adj])  # concatenate all original obs before jump with adjusted values after jump
-        jump = m[(m.diff() < -1000)]
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
     print('\nno jump detected!')
 
@@ -886,11 +841,7 @@ def read_snowbuoy_observations(dest_path, url, ipol_density=None):
 
     # Q: Differences in accumulation & conversion to SWE
     # calculate change in accumulation (in mm) for each buoy sensor add it as an additional column to the dataframe buoy
-<<<<<<< HEAD
     buoy_change = (buoy_corr[['sh1', 'sh2', 'sh3', 'sh4']] - buoy_corr[['sh1', 'sh2', 'sh3', 'sh4']].min())
-=======
-    buoy_change = (buoy[['sh1', 'sh2', 'sh3', 'sh4']] - buoy[['sh1', 'sh2', 'sh3', 'sh4']][:1].values[0]) * 1000
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     buoy_change.columns = ['dsh1', 'dsh2', 'dsh3', 'dsh4']
 
     # convert snow accumulation to SWE (with interpolated and constant density values)
@@ -1025,15 +976,6 @@ def read_laser_observations(dest_path, laser_path, yy, ipol, laser_pickle='nm_la
 
     # detect all dublicates and only keep last dublicated entries
     laser = laser[~laser.index.duplicated(keep='last')]
-<<<<<<< HEAD
-=======
-
-    # store as .pkl
-    laser.to_pickle(loc_laser_dir + laser_pickle + '.pkl')
-    print(colored(
-        '\nstored all old and new laser observations (without dublicates) to pickle: %s' + loc_laser_dir + laser_pickle + '.pkl',
-        'blue'))
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
     # store as .pkl
     laser.to_pickle(loc_laser_dir + laser_pickle + '.pkl')
@@ -1076,19 +1018,10 @@ def filter_laser_observations(ipol, laser, threshold=1):
         gradient = f_clean.diff()
         outliers = f_clean.index[(gradient > 500) | (gradient < -500)]
 
-<<<<<<< HEAD
     # Q: filter observations
     print('\nmedian filtering')
     laser_fil = f_clean.rolling('D').median()
     laser_fil_std = f_clean.rolling('D').std()
-=======
-    # calculate change in accumulation (in mm) and add it as an additional column to the dataframe
-    fil_dsh = (fil_dsh - fil_dsh[0])
-
-    # 3. filter observations
-    dsh_laser = fil_dsh.rolling('D').median()
-    dsh_laser_std = fil_dsh.rolling('D').std()
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
     # calculate change in accumulation (in mm) and add it as an additional column to the dataframe
     print('\ncalculate diff to min')
@@ -1153,19 +1086,6 @@ def read_reference_data(dest_path, laser_path, yy, url, read_manual=[True, False
 
     return manual, ipol, buoy, poles, laser, laser_filtered
 
-def convert_swesh2density(swe, sh):
-    """ calculate snow density [kg/m3] from SWE and snow accumulation: density[kg/m3] = SWE [mm w.e.] * 1000 / sh[m])
-    :param swe: dataframe containing swe values (in mm w.e.) from GNSS-refractometry
-    :param sh: dataframe containing accumulation values (in m) from GNSS-reflectometry
-    :return: density
-    """
-    # calculate density
-    density = ((swe.resample('D').median() * 1000).divide(sh.resample('D').median(), axis=0)).dropna()
-
-    # remove densities lower than the density of new snow (50 kg/m3) or higher than the density of firn (830 kg/m3) or ice (917 kg/m3)
-    density_cleaned = density[~((density < 50) | (density >= 830))]
-
-    return density, density_cleaned
 
 def convert_swesh2density(swe, sh, cal_date, cal_val):
     """ calculate, calibrate, and filter snow density [kg/m3] from SWE and snow accumulation: density[kg/m3] = SWE [mm w.e.] * 1000 / sh[m])
@@ -1447,11 +1367,7 @@ def calculate_linearfit(leica_daily, emlid_daily, manual, gnss_leica, gnss_emlid
     joined = joined['2021-12-23':]
     fit_15min_emlid = np.polyfit(joined.dswe_laser, joined.dswe_gnss, 1)
     predict_15min_emlid = np.poly1d(fit_15min_emlid)
-<<<<<<< HEAD
     print('Linear fit (laser vs. GNSS, 15min), Emlid: m = ', round(fit_15min_emlid[0], 2), ', b = ',
-=======
-    print('Linear fit (laser vs. GNSS, 15min), Emlid: nm = ', round(fit_15min_emlid[0], 2), ', b = ',
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
           int(fit_15min_emlid[1]))  # n=12, m=1.02, b=-8 mm w.e.
 
     return predict_daily, predict_emlid_daily, predict_15min, predict_15min_emlid
@@ -1569,21 +1485,9 @@ def calculate_rmse_density(density_leica, density_emlid, manual):
     """
     print(colored('\nGNSS-RR results', 'blue'))
     # RMSE
-<<<<<<< HEAD
     diff_density_manual = (manual - density_leica).dropna()
     rmse_manual_density = np.sqrt((np.sum(diff_density_manual ** 2)) / len(diff_density_manual))
     print('Density RMSE (manual vs. GNSS-RR, monthly), Leica: %.1f' % rmse_manual_density)
-=======
-    rmse_manual = np.sqrt((np.sum(diffs_swe_daily.dswe_manual ** 2)) / len(diffs_swe_daily.dswe_manual))
-    print('\nRMSE (manual vs. GNSS, daily), Leica: %.1f' % rmse_manual)
-    rmse_manual_emlid = np.sqrt(
-        (np.sum(diffs_swe_daily.dswe_manual_emlid ** 2)) / len(diffs_swe_daily.dswe_manual_emlid))
-    print('RMSE (manual vs. GNSS, daily), Emlid: %.1f' % rmse_manual_emlid)
-    rmse_laser = np.sqrt((np.sum(diffs_swe_15min.dswe_laser ** 2)) / len(diffs_swe_15min.dswe_laser))
-    print('RMSE (laser vs. GNSS, 15min), Leica: %.1f' % rmse_laser)
-    rmse_laser_emlid = np.sqrt((np.sum(diffs_swe_15min.dswe_laser_emlid ** 2)) / len(diffs_swe_15min.dswe_laser_emlid))
-    print('RMSE (laser vs. GNSS, 15min), Emlid: %.1f' % rmse_laser_emlid)
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
     diff_density_manual_emlid = (manual - density_emlid).dropna()
     rmse_manual_density_emlid = np.sqrt((np.sum(diff_density_manual_emlid ** 2)) / len(diff_density_manual_emlid))
@@ -1655,13 +1559,8 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
     if emlid is not None:
         emlid.plot(color='salmon', linestyle='--')
     if manual is not None:
-<<<<<<< HEAD
         manual.SWE_aboveAnt.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
         plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='darkblue',
-=======
-        manual.SWE_aboveAnt.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
-        plt.errorbar(manual.SWE_aboveAnt.index, manual.SWE_aboveAnt, yerr=manual.SWE_aboveAnt / 10, color='k',
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
                      linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
         laser.dswe.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
@@ -1669,11 +1568,7 @@ def plot_all_SWE(data_path, leica=None, emlid=None, manual=None, laser=None, buo
         plt.plot(buoy[['dswe1', 'dswe2', 'dswe3', 'dswe4']], color='lightgrey', linestyle='-', alpha=0.8)
     if poles is not None:
         plt.plot(poles[['dswe1', 'dswe2', 'dswe3', 'dswe4', 'dswe5', 'dswe6', 'dswe7', 'dswe8', 'dswe9', 'dswe10',
-<<<<<<< HEAD
                         'dswe11', 'dswe12', 'dswe13', 'dswe14', 'dswe15', 'dswe16']], linestyle=':', alpha=0.4)
-=======
-                        'dswe11', 'dswe12', 'dswe13', 'dswe14', 'dswe15', 'dswe16']], linestyle=':', alpha=0.6)
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     if std_leica is not None:
         plt.fill_between(leica.index, leica - std_leica, leica + std_leica, color="crimson", alpha=0.2)
     if std_emlid is not None:
@@ -1713,14 +1608,9 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
     plt.figure()
     diffs_swe.dswe_emlid.plot(linestyle='--', color='salmon', fontsize=12, figsize=(6, 5.5), ylim=y_lim).grid()
     if manual is not None:
-<<<<<<< HEAD
         diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
         plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10,
                      color='darkblue',
-=======
-        diffs_swe.dswe_manual.plot(color='k', linestyle=' ', marker='+', markersize=8, markeredgewidth=2).grid()
-        plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='k',
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
                      linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
         diffs_swe.dswe_laser.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
@@ -1731,14 +1621,11 @@ def plot_all_diffSWE(data_path, diffs_swe, manual=None, laser=None, buoy=None, p
                      ['dswe_pole1', 'dswe_pole2', 'dswe_pole3', 'dswe_pole4', 'dswe_pole5', 'dswe_pole6', 'dswe_pole7',
                       'dswe_pole8', 'dswe_pole9', 'dswe_pole10', 'dswe_pole11', 'dswe_pole12', 'dswe_pole13',
                       'dswe_pole14', 'dswe_pole15', 'dswe_pole16']].dropna(), linestyle=':', alpha=0.6)
-<<<<<<< HEAD
 
     diffs_swe.dswe_laser.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
     diffs_swe.dswe_manual.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1).grid()
     plt.errorbar(diffs_swe.dswe_manual.index, diffs_swe.dswe_manual, yerr=diffs_swe.dswe_manual / 10, color='darkblue',
                  linestyle='', capsize=4, alpha=0.5)
-=======
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
     plt.xlabel(None)
     plt.ylabel('ΔSWE (mm w.e.)', fontsize=14)
@@ -1921,11 +1808,7 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
         plt.errorbar(diffs_sh.dsh_manual.index, diffs_sh.dsh_manual, yerr=diffs_sh.dsh_manual / 10, color='darkblue',
                      linestyle='', capsize=4, alpha=0.5)
     if laser is not None:
-<<<<<<< HEAD
         diffs_sh_15min.dsh_laser.dropna().plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
-=======
-        diffs_sh.dsh_laser.plot(color='darkblue', linestyle='-.', label='Accumulation (cm)').grid()
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     if buoy is not None:
         plt.plot(diffs_sh[['dsh_buoy1', 'dsh_buoy2', 'dsh_buoy3', 'dsh_buoy4']], color='lightgrey', linestyle='-', alpha=0.8)
     if poles is not None:
@@ -1952,7 +1835,6 @@ def plot_all_diffAcc(data_path, diffs_sh, diffs_sh_15min, manual=None, laser=Non
         plt.show()
 
 
-<<<<<<< HEAD
 def plot_all_diffAcc_gnssir(data_path, manual=None, laser=None, buoy=None, poles=None, gnssir_acc_daily=None,
                             save=[False, True],
                             suffix='', leg=['Low-cost GNSS', 'Manual', 'Laser (SHM)'], y_lim=(-400, 1000),
@@ -2007,8 +1889,6 @@ def plot_all_diffAcc_gnssir(data_path, manual=None, laser=None, buoy=None, poles
         plt.show()
 
 
-=======
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 def plot_nrsat(data_path, nr_sat_leica, nr_sat_emlid, save=[False, True], suffix='', y_lim=(0, 35),
                x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Plot number of satellites for high-end and low-cost rovers
@@ -2077,17 +1957,12 @@ def plot_solquality(data_path, amb_leica, amb_emlid, save=[False, True], suffix=
         plt.show()
 
 
-<<<<<<< HEAD
 def plot_PPP_solution(dest_path, receiver, df_ppp=None, save=[False, True], suffix='',
-=======
-def plot_PPP_solution(dest_path, receiver, save=[False, True], suffix='',
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
                       x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
     """ Read GNSS precise point processing (PPP) solution files (.pos) in ITRF20 reference frame, processed online using the Canadian governmental PPP service:
         https://webapp.csrs-scrs.nrcan-rncan.gc.ca/geod/tools-outils/ppp.php
         and plot them
     """
-<<<<<<< HEAD
     # # create empty dataframe for all .log files
     # df_ppp = pd.DataFrame()
     # # read all PPP solution files in folder, parse date and time columns to datetimeindex and add them to the dataframe
@@ -2116,30 +1991,9 @@ def plot_PPP_solution(dest_path, receiver, save=[False, True], suffix='',
     # exclude outliers
     dh_corr = dh_corr[dh_corr.index != dh_corr.idxmax()]
     dh_corr = dh_corr[dh_corr.index != dh_corr.idxmin()]
-=======
-    # create empty dataframe for all .log files
-    df_ppp = pd.DataFrame()
-    # read all PPP solution files in folder, parse date and time columns to datetimeindex and add them to the dataframe
-    for file in glob.iglob(dest_path + '10_ppp/' + receiver + '/*.pos', recursive=True):
-        print(file)
-        # header: 'date', 'time', 'snow level (m)', 'signal(-)', 'temp (°C)', 'error (-)', 'checksum (-)'
-        ppp = pd.read_csv(file, header=7, delimiter=' ', skipinitialspace=True, na_values=["NaN"],
-                          usecols=[4, 5, 10, 11, 12, 22, 24, 25], parse_dates=[['date', 'time']],
-                          names=['date', 'time', 'dlat', 'dlon', 'dh', 'h', 'utm_e', 'utm_n'],
-                          index_col=['date_time'], encoding='latin1', engine='python')
-        df_ppp = pd.concat([df_ppp, ppp], axis=0)
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
-
-    # correct antenna height change in rinex obs files data
-    dh_pre = df_ppp.dh[(df_ppp.index < df_ppp.dh.diff().idxmin())] - 3.61
-    dh_corr = pd.concat([dh_pre, df_ppp.dh[~(df_ppp.index < df_ppp.dh.diff().idxmin())]])
-    # exclude outliers
-    dh_corr = dh_corr[dh_corr.index != dh_corr.idxmax()]
-    dh_corr = dh_corr[dh_corr.index != dh_corr.idxmin()]
 
     # plot lat, lon, h timeseries
     fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True)
-<<<<<<< HEAD
     (dlat_corr - dlat_corr[0]).plot(ax=axes[0], ylim=(-10, 250), color='steelblue', fontsize=12).grid()
     (dlon_corr - dlon_corr[0]).plot(ax=axes[1], ylim=(-250, 10), color='steelblue', fontsize=12).grid()
     ((dh_corr2 - dh_corr2[(dh_corr2.index < '2021-11-27')].median()) * 100).rolling('7D').median().dropna().plot(
@@ -2150,17 +2004,6 @@ def plot_PPP_solution(dest_path, receiver, save=[False, True], suffix='',
     axes[2].set_ylabel('ΔH (cm)', fontsize=14)
     axes[0].set_yticks([0, 50, 100, 150, 200, 250])
     axes[1].set_yticks([0, -50, -100, -150, -200, -250])
-=======
-    (df_ppp.dlat - df_ppp.dlat[0]).plot(ax=axes[0], ylim=(-10, 200), color='steelblue', fontsize=12).grid()
-    (df_ppp.dlon - df_ppp.dlon[0]).plot(ax=axes[1], ylim=(-200, 10), color='steelblue', fontsize=12).grid()
-    ((dh_corr - dh_corr[(dh_corr.index < '2021-11-27')].median()) * 100).plot(ax=axes[2], ylim=(-250, 500),
-                                                                              color='steelblue', fontsize=12).grid()
-    axes[0].set_ylabel('ΔLat (m)', fontsize=14)
-    axes[1].set_ylabel('ΔLon (m)', fontsize=14)
-    axes[2].set_ylabel('ΔH (cm)', fontsize=14)
-    axes[0].set_yticks([0, 50, 100, 150, 200])
-    axes[1].set_yticks([0, -50, -100, -150, -200])
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.xlabel(None)
@@ -2179,7 +2022,6 @@ def plot_PPP_solution(dest_path, receiver, save=[False, True], suffix='',
 
 # -------------------- GNSS Reflectometry functions ------------------------------------------
 
-<<<<<<< HEAD
 
 def prepare_orbits(sp3_outdir, raporbit_path, gnssir_path):
     """ Download, unzip, rename & rapid move orbits (need to match the gnssrefl input format!)
@@ -2361,14 +2203,10 @@ def conv_obs(rin_temp, gnssir_path, base_name):
 
 
 def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', copy=False, pickle='nmlb'):
-=======
-def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102, 201, 202, 207, 'all', '1st', '2nd'], excl_azi=False, copy=False, pickle='nmlb'):
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     """ Plot GNSS interferometric reflectometry (GNSS-IR) accumulation results from the high-end base station
         :param dest_path: path to processing directory
         :param ubuntu_path: path to Ubuntu localhost where the GNSS-IR results are processed/stored (e.g.: '//wsl.localhost/Ubuntu/home/sladina/test/gnssrefl/data/')
         :param base_name: name of reflectometry solution file base_name, e.g.: 'nmlb'
-<<<<<<< HEAD
         :copy: copy (True) or not (False) reflectometry solutions from ubuntu localhost to local folder
         :param pickle: name of pickle file (default = 'nmlb.pkl')
         :return df_rh
@@ -2378,19 +2216,6 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
     os.makedirs(loc_gnssir_dir, exist_ok=True)
 
     # Q: copy GNSS-IR solution files (*.txt) from the local Ubuntu server if not already existing
-=======
-        :param freq: chosen satellite system frequency to use results, 1=gps l1, 5=gps l5, 101=glonass l1, 102=glonass l2, 201=galileo l1, 202=galileo l2, 207=galileo l5
-        :param excl_azi: include all azimuth ranges (False) or exclude specific azimuth ranges (True) with reflections from Spuso
-        :copy: copy (True) or not (False) reflectometry solutions from ubuntu localhost to local folder
-        :param pickle: name of pickle file (default = 'nmlb.pkl')
-        :return df_rh, gnssir_acc, gnssir_acc_sel
-    """
-    # create local directory for laser observations
-    loc_gnssir_dir = dest_path + '20_solutions/' + base_name + '/rh2-8m_ele5-30/'
-    os.makedirs(loc_gnssir_dir, exist_ok=True)
-
-    # Q: copy reflectometry solution files (*.txt) from the local Ubuntu server if not already existing
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     if copy is True:
         print(colored("\ncopy new reflectometry solution files", 'blue'))
         # get list of yearly directories
@@ -2402,7 +2227,6 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
                     file = os.path.basename(f)
                     # skip files of 2021 before 26th nov (no gps data before installation)
                     if not os.path.exists(loc_gnssir_dir + file):
-<<<<<<< HEAD
                         # check if the name of the solution file begins with the year
                         if file[:4] == year:
                             print(file)
@@ -2412,8 +2236,6 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
                             print("\nGNSS-IR solution files renamed from %s to %s" % (file, year + '_' + base_name.lower() + file))
 
                         # copy the files
-=======
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
                         shutil.copy2(f, loc_gnssir_dir)
                         print("file copied from %s to %s" % (f, loc_gnssir_dir))
                     else:
@@ -2425,11 +2247,7 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
     else:
         print("\nno files to copy")
 
-<<<<<<< HEAD
     # Q: read all existing GNSS-IR observations from .pkl if already exists, else create empty dataframe
-=======
-    # Q: read all existing laser observations from .pkl if already exists, else create empty dataframe
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     loc_gnssir_dir = dest_path + '20_solutions/' + base_name + '/rh2-8m_ele5-30/'
     path_to_oldpickle = loc_gnssir_dir + pickle + '.pkl'
     if os.path.exists(path_to_oldpickle):
@@ -2474,7 +2292,6 @@ def read_gnssir(dest_path, ubuntu_path, base_name, yy='21', freq=[1, 5, 101, 102
         '\nstored all old and new reflectometry solution data (without dublicates) in pickle: %s' + loc_gnssir_dir + pickle + '.pkl',
         'blue'))
 
-<<<<<<< HEAD
     return df_rh
 
 
@@ -2488,10 +2305,6 @@ def filter_gnssir(df_rh, freq=[1, 5, 101, 102, 201, 202, 207, 'all', '1st', '2nd
     """
 
     # Q: select frequencies to analyze
-=======
-    # Q: reflector height and snow accumulation change
-    # select frequencies to analyze
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     if freq == 'all':  # select all frequencies from all systems
         print('all frequencies are selected')
         gnssir_rh = df_rh[['RH', 'Azim']]
@@ -2505,7 +2318,6 @@ def filter_gnssir(df_rh, freq=[1, 5, 101, 102, 201, 202, 207, 'all', '1st', '2nd
         print('single frequency is selected')
         gnssir_rh = df_rh[['RH', 'Azim']][(df_rh.freq == freq)]
 
-<<<<<<< HEAD
     # Q: excluding spuso e-m-wave bending and reflection zone azimuths and convert to mm
     gnssir_rh = gnssir_rh[(gnssir_rh.Azim > 30) & (gnssir_rh.Azim < 310)]
     gnssir_rh = gnssir_rh.RH[(gnssir_rh.Azim > 210) | (gnssir_rh.Azim < 160)] * 1000
@@ -2570,62 +2382,6 @@ def plot_gnssir(dest_path, gnssir_acc, gnssir_acc_daily, gnssir_acc_daily_std, l
 
     # plot variation: use 2 * sigma GNSS-IR results
     # plt.fill_between(gnssir_acc_daily.index, gnssir_acc_daily - 2 * gnssir_acc_daily_std, gnssir_acc_daily + 2 * gnssir_acc_daily_std, color="steelblue", alpha=0.4)
-=======
-    # select to exclude azimuth angles with biased reflections (e.g., from Spuso)
-    if excl_azi is False:
-        gnssir_rh = df_rh.RH
-    else:
-        # excluding spuso e-m-wave bending and reflection zone azimuths
-        gnssir_rh = gnssir_rh[(gnssir_rh.Azim > 30) & (gnssir_rh.Azim < 310)]
-        gnssir_rh = gnssir_rh.RH[(gnssir_rh.Azim > 210) | (gnssir_rh.Azim < 160)]
-
-    # accumulation (frequency 1) in m
-    gnssir_acc = (gnssir_rh[0] - gnssir_rh) * 1000
-    gnssir_acc_res = gnssir_acc.resample('D').median()
-
-    # Q: adjust for snow mast heightening (approx. 3m elevated several times a year)
-    print('\ndata is corrected for snow mast heightening events (remove sudden jumps > 1m)')
-    jump = gnssir_acc_res[(gnssir_acc_res.diff() < -1000)]  # detect jumps (> 1000mm) in the dataset
-
-    while jump.empty is False:
-        print('\njump of height %s is detected! at %s' % (jump[0], jump.index.format()[0]))
-        # adjust resampled data
-        adj = gnssir_acc_res[(gnssir_acc_res.index >= jump.index.format()[0])] - jump[
-            0]  # correct all observations after jump [0]
-        gnssir_acc_res = pd.concat([gnssir_acc_res[~(gnssir_acc_res.index >= jump.index.format()[0])],
-                                    adj])  # concatenate all original obs before jump with adjusted values after jump
-
-        # adjust all data
-        adj_nores = gnssir_acc[(gnssir_acc.index >= jump.index.format()[0])] - jump[
-            0]  # correct all observations after jump [0]
-        gnssir_acc = pd.concat([gnssir_acc[~(gnssir_acc.index >= jump.index.format()[0])],
-                                adj_nores])  # concatenate all original obs before jump with adjusted values after jump
-
-        # check if another jump exists
-        jump = gnssir_acc_res[(gnssir_acc_res.diff() < -1000)]
-
-    print('\nno jump detected!')
-    gnssir_acc_sel = gnssir_acc - gnssir_acc[0]
-    gnssir_acc_sel.index = gnssir_acc_sel.index + pd.Timedelta(seconds=18)
-
-    return df_rh, gnssir_acc, gnssir_acc_sel
-
-
-def plot_gnssir(dest_path, gnssir_acc, laser, leica, emlid=None, manual=None, buoy=None, poles=None,
-                leg=['_', 'GNSS-IR', 'Laser (SHM)', 'High-end GNSS'], save=False, suffix='', x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
-    """ Plot GNSS interferometric reflectometry (GNSS-IR) accumulation results from the high-end base station """
-
-    # plot gnssir snow accumulation (resampled median per day & 1 std)
-    plt.close()
-    gnssir_acc_median = gnssir_acc.resample('D').median().dropna()
-    gnssir_acc_std = 2 * gnssir_acc.resample('D').std().median()
-    gnssir_acc_median.plot(color='steelblue', ylim=(-200, 1600), fontsize=12,
-                           xlim=x_lim,
-                           figsize=(6, 5.5)).grid()
-
-    plt.fill_between(gnssir_acc_median.index, gnssir_acc_median - gnssir_acc_std, gnssir_acc_median + gnssir_acc_std,
-                     color="steelblue", alpha=0.4)
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
     # plot gnss-refractometry accumulation data (converted from SWE)
     if leica is not None:
@@ -2663,7 +2419,6 @@ def plot_gnssir(dest_path, gnssir_acc, laser, leica, emlid=None, manual=None, bu
     else:
         plt.show()
 
-<<<<<<< HEAD
     plt.close()
 
 
@@ -2727,9 +2482,6 @@ def plot_all_Acc_gnssir(data_path, leica=None, emlid=None, manual=None, laser=No
             bbox_inches='tight')
     else:
         plt.show()
-=======
-    return gnssir_acc_median, gnssir_acc_std
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
 
 def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=None, leg=['High-end GNSS-RR', 'Manual'], save=False, suffix='', x_lim=(dt.date(2021, 11, 26), dt.date(2022, 12, 1))):
@@ -2738,7 +2490,6 @@ def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=Non
     # plot density (all data & resampled median per day)
     plt.close()
     if density_leica is not None:
-<<<<<<< HEAD
         density_leica.plot(color='k', linestyle='-', ylim=(-1, 1000), fontsize=12, xlim=x_lim, figsize=(6, 5.5)).grid()
     else:
         if density_emlid is not None:
@@ -2746,35 +2497,16 @@ def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=Non
 
     if density_emlid is not None:
         density_emlid.plot(color='salmon', linestyle='--').grid()
-=======
-        density_leica.plot(color='crimson', linestyle=' ', marker='+', markersize=6, markeredgewidth=1, ylim=(-1, 1000), fontsize=12,
-                        xlim=x_lim,
-                        figsize=(6, 5.5)).grid()
-    else:
-        if density_emlid is not None:
-            density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=4, markeredgewidth=0, ylim=(-1, 1000), fontsize=12,
-                        xlim=x_lim, figsize=(6, 5.5)).grid()
-
-    if density_emlid is not None:
-        density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=4, markeredgewidth=0).grid()
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
 
     # plt.fill_between(gnssir_acc_median.index, gnssir_acc_median - gnssir_acc_std, gnssir_acc_median + gnssir_acc_std, color="steelblue", alpha=0.4)
 
     # plot manual density data & error
     if manual is not None:
         # plot density of layers above antenna
-<<<<<<< HEAD
         manual.Density_aboveAnt.plot(color='darkblue', linestyle=' ', marker='o', markersize=5, markeredgewidth=1,
                                      label='Manual').grid()
         plt.errorbar(manual.Density_aboveAnt.index, manual.Density_aboveAnt, yerr=manual.Density_aboveAnt / 10,
                      color='darkblue', linestyle='', capsize=4,
-=======
-        manual.Density_aboveAnt.plot(color='k', linestyle=' ', marker='*', markersize=8, markeredgewidth=1,
-                                     label='Manual').grid()
-        plt.errorbar(manual.Density_aboveAnt.index, manual.Density_aboveAnt, yerr=manual.Density_aboveAnt / 10,
-                     color='k', linestyle='', capsize=4,
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
                      alpha=0.8)
         # # plot density of upper 1m layer
         # manual.Density.plot(color='k', linestyle=' ', marker='o', markersize=4, markeredgewidth=1,
@@ -2788,11 +2520,7 @@ def plot_density(dest_path, density_leica, density_emlid, laser=None, manual=Non
         laser.dsh.plot(color='darkblue', linestyle='-.').grid()
 
     # define plot settings
-<<<<<<< HEAD
     plt.legend(leg, fontsize=12, loc='upper right')
-=======
-    plt.legend(leg, fontsize=12, loc='upper left')
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.grid()
@@ -2815,30 +2543,17 @@ def plot_diff_density(dest_path, density_leica, density_emlid, laser=None, manua
     plt.close()
 
     if density_leica is not None:
-<<<<<<< HEAD
         density_leica.plot(color='k', linestyle=' ', marker='o', markersize=5, markeredgewidth=1,
                            ylim=(-300, 300), fontsize=12,
                            xlim=x_lim, figsize=(6, 5.5)).grid()
 
     if density_emlid is not None:
         density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=5, markeredgewidth=1, ylim=(-300, 300),
-=======
-        density_leica.plot(color='crimson', linestyle=' ', marker='+', markersize=6, markeredgewidth=1,
-                           ylim=(-400, 400), fontsize=12,
-                           xlim=x_lim, figsize=(6, 5.5)).grid()
-
-    if density_emlid is not None:
-        density_emlid.plot(color='salmon', linestyle=' ', marker='o', markersize=4, markeredgewidth=0, ylim=(-400, 400),
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
                            fontsize=12,
                            xlim=x_lim, figsize=(6, 5.5)).grid()
 
     # define plot settings
-<<<<<<< HEAD
     plt.legend(leg, fontsize=12, loc='upper right')
-=======
-    plt.legend(leg, fontsize=12, loc='upper left')
->>>>>>> 05d3630 (Optimized for reading only new data textfiles and attach them to the binary pickle.)
     plt.gca().xaxis.set_major_locator(MonthLocator())
     plt.gca().xaxis.set_minor_locator(MonthLocator(bymonthday=15))
     plt.grid()
