@@ -41,7 +41,7 @@ The scripts should be executed one after the other (at the earliest when the pre
 The method follows Steiner et al. (2023, 2022, 2020): 
 
 Steiner, L.; Schmithüsen, H.; Wickert, J.; Eisen, O. Combined GNSS Reflectometry/Refractometry for
-Continuous In Situ Surface Mass Balance Estimation on an Antarctic Ice Shelf, 2023, submitted to The Cryosphere.
+Continuous In Situ Surface Mass Balance Estimation on an Antarctic Ice Shelf, 2023, accepted at The Cryosphere.
 
 Steiner, L.; Studemann, G.; Grimm, D.E.; Marty, C.; Leinss, S. (Near) Real-Time Snow Water Equivalent Observation Using GNSS Refractometry and RTKLIB. 
 Sensors 2022, 22, 6918, https://doi.org/10.3390/s22186918.
