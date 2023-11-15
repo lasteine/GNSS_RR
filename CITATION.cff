@@ -6,5 +6,7 @@ authors:
     orcid: https://orcid.org/0000-0002-4958-0849
 title: "Continuous estimation of snow/firn accumulation, surface mass, and density 
 on a moving surface using combined GNSS reflectometry/refractometry (GNSS-RR)."
-version: 1.0
+version: 1.0.0
 date-released: 2021-08-01
+doi: 10.5281/zenodo.10135417
+url: "https://github.com/lasteine/GNSS_RR"
